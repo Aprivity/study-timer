@@ -1,25 +1,30 @@
-.flip-clock { display: flex; align-items: center; justify-content: center; gap: clamp(3px, .8vw, 7px); font-family: var(--font-geist-mono), monospace; font-variant-numeric: tabular-nums; }
-.flip-digit { position: relative; display: inline-block; width: clamp(39px, 7.2vw, 60px); height: clamp(62px, 11vw, 91px); perspective: 520px; filter: drop-shadow(0 12px 17px rgba(0,0,0,.23)); }
-.digit-half, .flip-face { position: absolute; left: 0; width: 100%; height: 50%; overflow: hidden; color: var(--text-primary); background: linear-gradient(145deg, #202d24, #17211a); border: 1px solid rgba(185,203,187,.1); }
+.flip-clock { display: flex; align-items: center; justify-content: center; gap: clamp(3px, .8vw, 7px); max-width: 100%; font-family: var(--font-geist-mono), monospace; font-variant-numeric: tabular-nums; }
+.flip-digit { position: relative; display: inline-block; flex: 0 0 auto; width: clamp(39px, 7.2vw, 60px); height: clamp(62px, 11vw, 91px); perspective: 520px; filter: drop-shadow(0 10px 15px rgba(0,0,0,.2)); }
+.flip-clock.is-hours .flip-digit { width: clamp(34px, 5vw, 48px); height: clamp(56px, 8.4vw, 76px); }
+.digit-half, .flip-face { position: absolute; left: 0; width: 100%; height: 50%; overflow: hidden; color: #e8eee8; background: linear-gradient(145deg, #202d24, #17221b); border: 1px solid rgba(185,203,187,.11); }
 .digit-half span, .flip-face span { position: absolute; width: 100%; height: 200%; display: grid; place-items: center; font-size: clamp(2.35rem, 6.5vw, 4.5rem); font-weight: 520; letter-spacing: -.09em; }
+.flip-clock.is-hours .digit-half span, .flip-clock.is-hours .flip-face span { font-size: clamp(2rem, 5vw, 3.55rem); }
 .digit-top { top: 0; border-radius: 9px 9px 2px 2px; }
 .digit-top span { top: 0; }
 .digit-bottom { bottom: 0; border-radius: 2px 2px 9px 9px; }
 .digit-bottom span { bottom: 0; }
-.digit-divider { position: absolute; z-index: 8; left: 2px; right: 2px; top: calc(50% - .5px); height: 1px; background: rgba(3,8,5,.75); box-shadow: 0 1px rgba(255,255,255,.035); }
+.digit-divider { position: absolute; z-index: 8; left: 2px; right: 2px; top: calc(50% - .5px); height: 1px; background: rgba(3,8,5,.72); box-shadow: 0 1px rgba(255,255,255,.04); }
 .flip-face { z-index: 6; backface-visibility: hidden; }
 .flip-face-out { top: 0; transform-origin: center bottom; border-radius: 9px 9px 2px 2px; }
 .flip-face-out span { top: 0; }
 .flip-face-in { bottom: 0; transform-origin: center top; transform: rotateX(90deg); border-radius: 2px 2px 9px 9px; }
 .flip-face-in span { bottom: 0; }
-.is-flipping .flip-face-out { animation: flip-out 210ms cubic-bezier(.55,.06,.68,.19) forwards; }
-.is-flipping .flip-face-in { animation: flip-in 210ms 210ms cubic-bezier(.22,.61,.36,1) forwards; }
-.clock-colon { color: var(--sage-muted); font-size: clamp(1.8rem, 5vw, 3.4rem); line-height: 1; transform: translateY(-2px); }
-@keyframes flip-out { to { transform: rotateX(-90deg); filter: brightness(.58); } }
+.is-flipping .flip-face-out { animation: flip-out 205ms cubic-bezier(.55,.06,.68,.19) forwards; }
+.is-flipping .flip-face-in { animation: flip-in 205ms 205ms cubic-bezier(.22,.61,.36,1) forwards; }
+.clock-colon { flex: 0 0 auto; color: var(--sage-muted); font-size: clamp(1.8rem, 5vw, 3.4rem); line-height: 1; transform: translateY(-2px); }
+@keyframes flip-out { to { transform: rotateX(-90deg); filter: brightness(.64); } }
 @keyframes flip-in { to { transform: rotateX(0deg); filter: brightness(1); } }
 @media (max-width: 480px) {
   .flip-digit { width: clamp(34px, 11vw, 44px); height: clamp(53px, 17vw, 68px); }
   .digit-half span, .flip-face span { font-size: clamp(2rem, 12vw, 3rem); }
+  .flip-clock.is-hours .flip-digit { width: clamp(29px, 8.6vw, 36px); height: clamp(48px, 13vw, 58px); }
+  .flip-clock.is-hours .digit-half span, .flip-clock.is-hours .flip-face span { font-size: clamp(1.72rem, 8.5vw, 2.25rem); }
+  .flip-clock.is-hours .clock-colon { font-size: 1.55rem; }
   .flip-clock { gap: 3px; }
 }
 @media (prefers-reduced-motion: reduce) { .flip-face { display: none; } }

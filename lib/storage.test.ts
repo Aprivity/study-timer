@@ -8,6 +8,16 @@ describe("storage validation", () => {
     expect(parseSettings("{broken").defaultDurationMinutes).toBe(45);
   });
   it("rejects malformed session entries", () => expect(parseSessions(JSON.stringify([{ id: "x" }]))).toEqual([]));
+  it("fills missing settings fields with safe defaults", () => {
+    const settings = parseSettings(JSON.stringify({ soundEnabled: false }));
+    expect(settings).toEqual({
+      soundEnabled: false,
+      defaultDurationMinutes: 45,
+      confirmEndEnabled: true,
+      autoFullscreen: false,
+      reduceMotion: false,
+    });
+  });
   it("clamps corrupt timer remaining time", () => {
     const timer = parseTimer(JSON.stringify({ status: "paused", totalSeconds: 1500, remainingSeconds: 9999 }));
     expect(timer?.remainingSeconds).toBe(1500);

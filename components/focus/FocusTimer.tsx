@@ -6,8 +6,9 @@ import { Focus, Leaf } from "lucide-react";
 import { useCountdown } from "@/hooks/useCountdown";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { DEFAULT_SETTINGS, parseSessions, parseSettings, parseTimer, STORAGE_KEYS } from "@/lib/storage";
-import { focusedSeconds } from "@/lib/timer";
-import { addSessionUnique } from "@/lib/sessions";
+import { calculateRemainingSeconds } from "@/lib/timer";
+import { addSessionUnique, createStoppedSession } from "@/lib/sessions";
+import { formatDuration } from "@/lib/time-format";
 import type { FocusSession } from "@/types/focus-session";
 import type { PersistedTimer } from "@/types/timer";
 import { CompleteDialog } from "@/components/dialogs/CompleteDialog";
@@ -46,8 +47,10 @@ export function FocusTimer() {
   const timerParser = useCallback((raw: string | null) => parseTimer(raw), []);
   const [persistedTimer, setPersistedTimer, timerHydrated] = useLocalStorage(STORAGE_KEYS.timer, timerParser);
   const [sessions, setSessions] = useLocalStorage<FocusSession[]>(STORAGE_KEYS.sessions, parseSessions);
-  const [settings] = useLocalStorage(STORAGE_KEYS.settings, parseSettings);
+  const [settings, , settingsHydrated] = useLocalStorage(STORAGE_KEYS.settings, parseSettings);
   const timer = useCountdown(DEFAULT_SETTINGS.defaultDurationMinutes * 60);
+  const restoreTimer = timer.restore;
+  const setTimerDuration = timer.setDuration;
   const [taskName, setTaskName] = useState("");
   const [category, setCategory] = useState("数学");
   const [startedAt, setStartedAt] = useState<number | null>(null);
@@ -59,22 +62,24 @@ export function FocusTimer() {
   const resumeAfterDialog = useRef(false);
 
   useEffect(() => {
-    if (!timerHydrated || ready) return;
+    if (!timerHydrated || !settingsHydrated || ready) return;
     let active = true;
     queueMicrotask(() => {
       if (!active) return;
       if (persistedTimer) {
-        timer.restore(persistedTimer);
+        restoreTimer(persistedTimer);
         setTaskName(persistedTimer.taskName);
         setCategory(persistedTimer.category);
         setStartedAt(persistedTimer.startedAt);
         setSessionToken(persistedTimer.sessionToken);
         setSavedSessionToken(persistedTimer.savedSessionToken);
+      } else {
+        setTimerDuration(settings.defaultDurationMinutes * 60);
       }
       setReady(true);
     });
     return () => { active = false; };
-  }, [persistedTimer, ready, timer, timerHydrated]);
+  }, [persistedTimer, ready, restoreTimer, setTimerDuration, settings.defaultDurationMinutes, settingsHydrated, timerHydrated]);
 
   useEffect(() => {
     if (!ready) return;
@@ -100,13 +105,14 @@ export function FocusTimer() {
       setSavedSessionToken(sessionToken);
       setCompleteDialogOpen(true);
       if (settings.soundEnabled) playCompleteTone();
+      if (settings.autoFullscreen && document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
     });
     return () => { active = false; };
-  }, [category, ready, savedSessionToken, sessionToken, setSessions, settings.soundEnabled, startedAt, taskName, timer.remainingSeconds, timer.status, timer.totalSeconds]);
+  }, [category, ready, savedSessionToken, sessionToken, setSessions, settings.autoFullscreen, settings.soundEnabled, startedAt, taskName, timer.remainingSeconds, timer.status, timer.totalSeconds]);
 
   useEffect(() => {
     const cleanTask = taskName.trim() || "未命名专注";
-    if (timer.status === "running") document.title = `${Math.floor(timer.remainingSeconds / 60).toString().padStart(2, "0")}:${String(timer.remainingSeconds % 60).padStart(2, "0")} · ${cleanTask}`;
+    if (timer.status === "running") document.title = `${formatDuration(timer.remainingSeconds)} · ${cleanTask}`;
     else if (timer.status === "paused") document.title = "已暂停 · Aprivity Focus";
     else if (timer.status === "completed" && completeDialogOpen) document.title = "专注完成 · Aprivity Focus";
     else document.title = "Aprivity Focus";
@@ -114,10 +120,21 @@ export function FocusTimer() {
   }, [completeDialogOpen, taskName, timer.remainingSeconds, timer.status]);
 
   const begin = () => {
+    if (timer.status !== "idle") return;
+    if (settings.autoFullscreen && !document.fullscreenElement && document.documentElement.requestFullscreen) {
+      void document.documentElement.requestFullscreen().catch(() => undefined);
+    }
     setStartedAt(Date.now()); setSessionToken(createId()); setSavedSessionToken(null);
     setCompleteDialogOpen(false); timer.start();
   };
   const requestEnd = () => {
+    if (!settings.confirmEndEnabled) {
+      const currentRemaining = timer.status === "running" && timer.endAt
+        ? calculateRemainingSeconds(timer.endAt)
+        : timer.remainingSeconds;
+      finishEarly(true, currentRemaining);
+      return;
+    }
     resumeAfterDialog.current = timer.status === "running";
     if (timer.status === "running") timer.pause();
     setEndDialogOpen(true);
@@ -127,19 +144,25 @@ export function FocusTimer() {
     if (resumeAfterDialog.current) timer.resume();
     resumeAfterDialog.current = false;
   };
-  const finishEarly = (save: boolean) => {
+  const finishEarly = (save: boolean, remainingOverride = timer.remainingSeconds) => {
     if (save && sessionToken && startedAt) {
-      const record: FocusSession = {
-        id: sessionToken, taskName: taskName.trim() || "未命名专注", category,
-        plannedSeconds: timer.totalSeconds, focusedSeconds: focusedSeconds(timer.totalSeconds, timer.remainingSeconds),
-        startedAt, endedAt: Date.now(), status: "stopped",
-      };
+      const record = createStoppedSession({
+        id: sessionToken, taskName, category, plannedSeconds: timer.totalSeconds,
+        remainingSeconds: remainingOverride, startedAt, endedAt: Date.now(),
+      });
       if (record.focusedSeconds > 0) setSessions((current) => addSessionUnique(current, record));
     }
-    setSavedSessionToken(sessionToken); setEndDialogOpen(false); resumeAfterDialog.current = false; timer.stop();
+    setSavedSessionToken(save ? sessionToken : null);
+    setEndDialogOpen(false);
+    setStartedAt(save ? startedAt : null);
+    setSessionToken(save ? sessionToken : null);
+    resumeAfterDialog.current = false;
+    if (save) timer.stop(); else timer.reset(settings.defaultDurationMinutes * 60);
+    if (settings.autoFullscreen && document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
   };
-  const reset = () => {
-    timer.reset(); setStartedAt(null); setSessionToken(null); setSavedSessionToken(null); setCompleteDialogOpen(false);
+  const startNewFocus = () => {
+    timer.reset(settings.defaultDurationMinutes * 60);
+    setStartedAt(null); setSessionToken(null); setSavedSessionToken(null); setCompleteDialogOpen(false);
   };
 
   const locked = timer.status === "running" || timer.status === "paused";
@@ -151,8 +174,8 @@ export function FocusTimer() {
     <section className="focus-shell">
       <div className="focus-heading"><p className="focus-status"><Focus size={14} />{statusText}</p><h1>{locked || timer.status === "completed" ? (taskName.trim() || "未命名专注") : "把注意力留给当下"}</h1></div>
       {!locked && timer.status === "idle" && <TaskInput taskName={taskName} category={category} disabled={false} onTaskChange={setTaskName} onCategoryChange={setCategory} />}
-      <ProgressRing progress={progress} status={timer.status}><FlipClock seconds={timer.remainingSeconds} animate={timer.status === "running"} /><p className="ring-caption">{timer.status === "running" ? "保持呼吸，继续向前" : timer.status === "paused" ? "时间已经为你停下" : timer.status === "completed" ? "专注已被记录" : `${Math.round(timer.totalSeconds / 60)} 分钟专注`}</p></ProgressRing>
-      <TimerControls status={timer.status} onStart={begin} onPause={timer.pause} onResume={timer.resume} onEnd={requestEnd} onReset={reset} onHistory={() => router.push("/history")} />
+      <ProgressRing progress={progress} status={timer.status}><FlipClock seconds={timer.remainingSeconds} animate={timer.status === "running" && !settings.reduceMotion} /><p className="ring-caption">{timer.status === "running" ? "保持呼吸，继续向前" : timer.status === "paused" ? "时间已经为你停下" : timer.status === "completed" ? (timer.remainingSeconds === 0 ? "专注已完成并记录" : "实际专注时长已保存") : `${Math.round(timer.totalSeconds / 60)} 分钟专注`}</p></ProgressRing>
+      <TimerControls status={timer.status} onStart={begin} onPause={timer.pause} onResume={timer.resume} onEnd={requestEnd} onReset={startNewFocus} onHistory={() => router.push("/history")} />
       {timer.status === "idle" && <TimePresets selectedMinutes={Math.round(timer.totalSeconds / 60)} disabled={locked} onSelect={(minutes) => timer.setDuration(minutes * 60)} />}
       <TodaySummary sessions={sessions} />
     </section>

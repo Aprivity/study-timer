@@ -11,8 +11,9 @@ describe("local-day statistics", () => {
   const now = new Date(2026, 6, 15, 20);
   it("sums today's focused time", () => expect(getTodayFocusedSeconds([
     session("a", new Date(2026, 6, 15, 9).getTime(), 1200),
-    session("b", new Date(2026, 6, 14, 23).getTime(), 2400),
-  ], now)).toBe(1200));
+    session("b", new Date(2026, 6, 15, 12).getTime(), 300, "stopped"),
+    session("c", new Date(2026, 6, 14, 23).getTime(), 2400),
+  ], now)).toBe(1500));
   it("counts only completed sessions today", () => expect(getTodayCompletedCount([
     session("a", new Date(2026, 6, 15, 9).getTime()),
     session("b", new Date(2026, 6, 15, 11).getTime(), 300, "stopped"),

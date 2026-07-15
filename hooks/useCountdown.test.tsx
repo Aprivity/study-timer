@@ -12,12 +12,25 @@ describe("useCountdown", () => {
     act(() => { vi.advanceTimersByTime(10_000); });
     expect(result.current.remainingSeconds).toBe(50);
     act(() => result.current.pause());
+    const pausedAt = Date.now();
     act(() => { vi.advanceTimersByTime(10_000); });
     expect(result.current.remainingSeconds).toBe(50);
     act(() => result.current.resume());
+    expect(result.current.endAt).toBe(pausedAt + 10_000 + 50_000);
     act(() => { vi.advanceTimersByTime(50_000); });
     expect(result.current.remainingSeconds).toBe(0);
     expect(result.current.status).toBe("completed");
     expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores an expired running timer at zero", () => {
+    const { result } = renderHook(() => useCountdown(60));
+    act(() => result.current.restore({
+      version: 1, status: "running", totalSeconds: 60, remainingSeconds: 40,
+      endAt: Date.now() - 1000, startedAt: Date.now() - 61_000,
+      taskName: "恢复测试", category: "项目", sessionToken: "one", savedSessionToken: null,
+    }));
+    expect(result.current.status).toBe("completed");
+    expect(result.current.remainingSeconds).toBe(0);
   });
 });

@@ -8,7 +8,13 @@ export const STORAGE_KEYS = {
   settings: "aprivity-focus:settings",
 } as const;
 
-export const DEFAULT_SETTINGS: FocusSettings = { soundEnabled: true, defaultDurationMinutes: 45 };
+export const DEFAULT_SETTINGS: FocusSettings = {
+  soundEnabled: true,
+  defaultDurationMinutes: 45,
+  confirmEndEnabled: true,
+  autoFullscreen: false,
+  reduceMotion: false,
+};
 
 function parse(raw: string | null): unknown {
   if (!raw) return null;
@@ -65,7 +71,13 @@ export function parseSettings(raw: string | null): FocusSettings {
   if (!isRecord(value)) return DEFAULT_SETTINGS;
   const duration = finiteNumber(value.defaultDurationMinutes) && value.defaultDurationMinutes >= 1 && value.defaultDurationMinutes <= 720
     ? Math.round(value.defaultDurationMinutes) : DEFAULT_SETTINGS.defaultDurationMinutes;
-  return { soundEnabled: typeof value.soundEnabled === "boolean" ? value.soundEnabled : true, defaultDurationMinutes: duration };
+  return {
+    soundEnabled: typeof value.soundEnabled === "boolean" ? value.soundEnabled : DEFAULT_SETTINGS.soundEnabled,
+    defaultDurationMinutes: duration,
+    confirmEndEnabled: typeof value.confirmEndEnabled === "boolean" ? value.confirmEndEnabled : DEFAULT_SETTINGS.confirmEndEnabled,
+    autoFullscreen: typeof value.autoFullscreen === "boolean" ? value.autoFullscreen : DEFAULT_SETTINGS.autoFullscreen,
+    reduceMotion: typeof value.reduceMotion === "boolean" ? value.reduceMotion : DEFAULT_SETTINGS.reduceMotion,
+  };
 }
 
 export function readStorage<T>(key: string, parser: (raw: string | null) => T): T {

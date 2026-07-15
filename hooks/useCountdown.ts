@@ -55,10 +55,14 @@ export function useCountdown(initialSeconds = 2700, options: CountdownOptions = 
   const pause = useCallback(() => {
     if (status !== "running" || endAt === null) return;
     const next = calculateRemainingSeconds(endAt);
+    if (next === 0) {
+      complete();
+      return;
+    }
     setRemainingSeconds(next);
     setEndAt(null);
-    setStatus(next === 0 ? "completed" : "paused");
-  }, [endAt, status]);
+    setStatus("paused");
+  }, [complete, endAt, status]);
 
   const resume = useCallback(() => {
     if (status !== "paused" || remainingSeconds <= 0) return;
@@ -71,10 +75,12 @@ export function useCountdown(initialSeconds = 2700, options: CountdownOptions = 
     setStatus("completed");
   }, []);
 
-  const reset = useCallback(() => {
+  const reset = useCallback((seconds = totalSeconds) => {
+    const next = clampDuration(seconds);
     completionFiredRef.current = false;
     setEndAt(null);
-    setRemainingSeconds(totalSeconds);
+    setTotalSeconds(next);
+    setRemainingSeconds(next);
     setStatus("idle");
   }, [totalSeconds]);
 
