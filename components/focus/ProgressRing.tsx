@@ -13,7 +13,7 @@ export function ProgressRing({ progress, status, children }: ProgressRingProps) 
   const circumference = 2 * Math.PI * radius;
   const safeProgress = Math.max(0, Math.min(1, progress));
   const offset = circumference * (1 - safeProgress);
-  const urgent = status === "running" && safeProgress <= 0.1;
+  const urgent = status === "running" && safeProgress < 0.1;
   return (
     <div className={`progress-ring ${status}`}>
       <svg viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`剩余进度 ${Math.round(safeProgress * 100)}%`}>

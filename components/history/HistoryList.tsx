@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { BookOpen, Filter, Sprout, Trash2 } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { parseSessions, STORAGE_KEYS } from "@/lib/storage";
 import { CATEGORIES } from "@/components/focus/TaskInput";
 import { HistoryItem } from "./HistoryItem";
@@ -26,8 +27,9 @@ export function HistoryList() {
   const [sessions, setSessions, hydrated] = useLocalStorage(STORAGE_KEYS.sessions, parseSessions);
   const [category, setCategory] = useState("全部");
   const [confirmClear, setConfirmClear] = useState(false);
+  const clearDialogRef = useDialogFocus(confirmClear, () => setConfirmClear(false));
   const grouped = useMemo(() => {
-    const filtered = category === "全部" ? sessions : sessions.filter((item) => item.category === category);
+    const filtered = (category === "全部" ? sessions : sessions.filter((item) => item.category === category)).slice();
     return filtered.sort((a, b) => b.endedAt - a.endedAt).reduce<Record<string, typeof sessions>>((groups, item) => {
       const key = dateKey(item.endedAt); (groups[key] ??= []).push(item); return groups;
     }, {});
@@ -41,6 +43,6 @@ export function HistoryList() {
     </div>
     {!hydrated ? <div className="empty-history"><Sprout /><p>正在读取本地记录…</p></div> : !hasVisible ? <div className="empty-history"><BookOpen /><h2>{sessions.length ? "这个分类还没有记录" : "还没有专注记录"}</h2><p>完成一次专注后，它会安静地出现在这里。</p></div> :
       <div className="history-groups">{Object.entries(grouped).map(([key, items]) => <section key={key}><h2>{dateLabel(key)}<span>{items.length} 次</span></h2><div>{items.map((item) => <HistoryItem key={item.id} session={item} onDelete={(id) => setSessions((current) => current.filter((record) => record.id !== id))} />)}</div></section>)}</div>}
-    {confirmClear && <div className="dialog-backdrop"><div className="dialog" role="alertdialog" aria-modal="true" aria-labelledby="clear-title"><p className="eyebrow">不可撤销</p><h2 id="clear-title">清空全部记录？</h2><p>这会永久删除保存在当前浏览器中的所有专注记录。</p><div className="dialog-actions"><button className="danger-button" onClick={() => { setSessions([]); setConfirmClear(false); }}>确认清空</button><button className="secondary-button" onClick={() => setConfirmClear(false)}>取消</button></div></div></div>}
+    {confirmClear && <div className="dialog-backdrop"><div ref={clearDialogRef} className="dialog" role="alertdialog" aria-modal="true" aria-labelledby="clear-title" aria-describedby="clear-description"><p className="eyebrow">不可撤销</p><h2 id="clear-title">清空全部记录？</h2><p id="clear-description">这会永久删除保存在当前浏览器中的所有专注记录。</p><div className="dialog-actions"><button className="danger-button" onClick={() => { setSessions([]); setConfirmClear(false); }}>确认清空</button><button className="secondary-button" onClick={() => setConfirmClear(false)}>取消</button></div></div></div>}
   </>;
 }
