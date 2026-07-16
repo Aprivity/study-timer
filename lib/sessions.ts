@@ -13,6 +13,10 @@ interface StoppedSessionInput {
   remainingSeconds: number;
   startedAt: number;
   endedAt: number;
+  mode?: FocusSession["mode"];
+  cycleId?: string;
+  pomodoroRound?: number;
+  pomodoroRoundsTotal?: number;
 }
 
 export function createStoppedSession(input: StoppedSessionInput): FocusSession {
@@ -25,5 +29,9 @@ export function createStoppedSession(input: StoppedSessionInput): FocusSession {
     startedAt: input.startedAt,
     endedAt: input.endedAt,
     status: "stopped",
+    mode: input.mode,
+    cycleId: input.cycleId,
+    pomodoroRound: input.pomodoroRound,
+    pomodoroRoundsTotal: input.pomodoroRoundsTotal,
   };
 }

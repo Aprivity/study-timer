@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { calculateRemainingSeconds, clampDuration } from "@/lib/timer";
 import type { PersistedTimer, TimerStatus } from "@/types/timer";
 
+type CountdownSnapshot = Pick<PersistedTimer, "status" | "totalSeconds" | "remainingSeconds" | "endAt"> & { version?: number };
+
 interface CountdownOptions { onComplete?: () => void; }
 
 export function useCountdown(initialSeconds = 2700, options: CountdownOptions = {}) {
@@ -45,10 +47,12 @@ export function useCountdown(initialSeconds = 2700, options: CountdownOptions = 
     };
   }, [endAt, status, sync]);
 
-  const start = useCallback(() => {
+  const start = useCallback((seconds = totalSeconds) => {
+    const next = clampDuration(seconds);
     completionFiredRef.current = false;
-    setRemainingSeconds(totalSeconds);
-    setEndAt(Date.now() + totalSeconds * 1000);
+    setTotalSeconds(next);
+    setRemainingSeconds(next);
+    setEndAt(Date.now() + next * 1000);
     setStatus("running");
   }, [totalSeconds]);
 
@@ -94,7 +98,7 @@ export function useCountdown(initialSeconds = 2700, options: CountdownOptions = 
     completionFiredRef.current = false;
   }, [status]);
 
-  const restore = useCallback((timer: PersistedTimer) => {
+  const restore = useCallback((timer: CountdownSnapshot) => {
     setTotalSeconds(timer.totalSeconds);
     if (timer.status === "running" && timer.endAt) {
       const next = calculateRemainingSeconds(timer.endAt);
