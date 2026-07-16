@@ -1,6 +1,9 @@
 name: Package Aprivity Focus preview
 
 on:
+  push:
+    branches:
+      - feat/custom-background-system
   pull_request:
     branches:
       - main
