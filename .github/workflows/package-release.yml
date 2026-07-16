@@ -1,0 +1,51 @@
+name: Package Aprivity Focus preview
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Validate and package static site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build static export
+        run: npm run build
+
+      - name: Create deployment archive
+        run: zip -r aprivity-focus-background-preview.zip out README.md
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: aprivity-focus-background-preview
+          path: aprivity-focus-background-preview.zip
+          if-no-files-found: error
+          retention-days: 30
