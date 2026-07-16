@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Accessibility, ArrowLeft, BellRing, Clock3, Maximize2, ShieldAlert, ShieldCheck } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
+import { BackgroundSettingsPanel } from "@/components/background/BackgroundSettingsPanel";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { parseSettings, STORAGE_KEYS } from "@/lib/storage";
 import type { FocusSettings } from "@/types/settings";
@@ -32,7 +33,8 @@ export default function SettingsPage() {
       <ToggleSetting icon={<ShieldAlert />} title="提前结束确认" description="结束未完成的专注前，询问保存、放弃或继续。" checked={settings.confirmEndEnabled} onChange={() => update("confirmEndEnabled", !settings.confirmEndEnabled)} />
       <ToggleSetting icon={<Maximize2 />} title="开始时自动全屏" description="开始专注时尝试进入浏览器全屏；被拒绝时保持正常模式。" checked={settings.autoFullscreen} onChange={() => update("autoFullscreen", !settings.autoFullscreen)} />
       <ToggleSetting icon={<Accessibility />} title="减少翻页动画" description="直接替换数字，不播放 3D 翻页动画。" checked={settings.reduceMotion} onChange={() => update("reduceMotion", !settings.reduceMotion)} />
-      <div className="privacy-note"><ShieldCheck /><div><h2>你的数据留在本地</h2><p>Aprivity Focus V1 不使用账号、后端或数据库。计时状态、设置和历史仅保存在当前浏览器的 localStorage 中。</p></div></div>
+      <div className="privacy-note"><ShieldCheck /><div><h2>你的数据留在本地</h2><p>计时状态、设置和历史保存在 localStorage；自定义背景图片保存在 IndexedDB。所有数据都不会上传。</p></div></div>
     </section>
+    <BackgroundSettingsPanel />
   </PageContainer>;
 }
