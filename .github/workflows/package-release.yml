@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: package-preview-${{ github.ref }}
@@ -52,3 +52,17 @@ jobs:
           path: aprivity-focus-background-preview.zip
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish GitHub Release v1.0.0
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v1.0.0 >/dev/null 2>&1; then
+            gh release upload v1.0.0 aprivity-focus-background-preview.zip --clobber
+          else
+            gh release create v1.0.0 aprivity-focus-background-preview.zip \
+              --target 3b1e542fffa867b7cca6508fc5e2040fa47b55bb \
+              --title "Aprivity Focus v1.0.0" \
+              --notes "Aprivity Focus 首个正式发行版。包含准确可恢复的学习倒计时、历史与统计、GitHub Pages 静态部署，以及六个内置背景、自定义纯色/渐变/本地图片背景和深浅色界面适配。压缩包内包含可直接部署的 out/ 静态站点与 README。"
+          fi
