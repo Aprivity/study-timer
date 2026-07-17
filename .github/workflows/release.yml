@@ -1,0 +1,73 @@
+name: Package Release
+
+on:
+  push:
+    branches:
+      - "release/v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build static site
+        run: npm run build
+
+      - name: Prepare release archives
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          if [[ "${GITHUB_REF_NAME}" != "release/v${VERSION}" ]]; then
+            echo "Branch ${GITHUB_REF_NAME} does not match package version v${VERSION}."
+            exit 1
+          fi
+
+          SOURCE_ARCHIVE="Aprivity-Focus-v${VERSION}-source.zip"
+          STATIC_ARCHIVE="Aprivity-Focus-v${VERSION}-static.zip"
+          git archive --format=zip --prefix="Aprivity-Focus-v${VERSION}/" --output="${SOURCE_ARCHIVE}" "${GITHUB_SHA}"
+          cd out
+          zip -qr "../${STATIC_ARCHIVE}" .
+          cd ..
+          sha256sum "${SOURCE_ARCHIVE}" "${STATIC_ARCHIVE}" > "Aprivity-Focus-v${VERSION}-SHA256SUMS.txt"
+
+          echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
+          echo "SOURCE_ARCHIVE=${SOURCE_ARCHIVE}" >> "${GITHUB_ENV}"
+          echo "STATIC_ARCHIVE=${STATIC_ARCHIVE}" >> "${GITHUB_ENV}"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          TAG="v${VERSION}"
+          NOTES="Aprivity Focus ${TAG} adds the complete Pomodoro cycle mode while preserving free focus, local recovery, history, statistics, backgrounds, and GitHub Pages export."
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" "${SOURCE_ARCHIVE}" "${STATIC_ARCHIVE}" "Aprivity-Focus-v${VERSION}-SHA256SUMS.txt" --clobber
+          else
+            gh release create "${TAG}" "${SOURCE_ARCHIVE}" "${STATIC_ARCHIVE}" "Aprivity-Focus-v${VERSION}-SHA256SUMS.txt" --target "${GITHUB_SHA}" --title "Aprivity Focus ${TAG}" --notes "${NOTES}"
+          fi
