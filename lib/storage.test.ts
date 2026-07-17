@@ -12,6 +12,7 @@ describe("storage validation", () => {
     const settings = parseSettings(JSON.stringify({ soundEnabled: false }));
     expect(settings).toEqual({
       soundEnabled: false,
+      notificationsEnabled: false,
       defaultDurationMinutes: 45,
       confirmEndEnabled: true,
       autoFullscreen: false,
@@ -27,6 +28,10 @@ describe("storage validation", () => {
       },
     });
   });
+  it("accepts only a boolean desktop notification setting", () => {
+    expect(parseSettings(JSON.stringify({ notificationsEnabled: true })).notificationsEnabled).toBe(true);
+    expect(parseSettings(JSON.stringify({ notificationsEnabled: "yes" })).notificationsEnabled).toBe(false);
+  });
   it("migrates V1 timer state to free mode without losing active time", () => {
     const timer = parseTimer(JSON.stringify({ version: 1, status: "running", totalSeconds: 2700, remainingSeconds: 1200, endAt: 9999, taskName: "旧任务", category: "阅读" }));
     expect(timer).toMatchObject({ version: 2, mode: "free", status: "running", remainingSeconds: 1200, taskName: "旧任务", pomodoro: null });
@@ -39,6 +44,7 @@ describe("storage validation", () => {
   it("restores valid pomodoro phase state and falls back from invalid fields", () => {
     const timer = parseTimer(JSON.stringify({ version: 2, mode: "pomodoro", status: "paused", totalSeconds: 300, remainingSeconds: 200, pomodoro: { phase: "short-break", currentRound: 2, cycleId: "cycle" } }));
     expect(timer?.pomodoro).toEqual({ phase: "short-break", currentRound: 2, cycleId: "cycle" });
+    expect(timer?.notifiedToken).toBeNull();
     const invalid = parseTimer(JSON.stringify({ version: 2, mode: "pomodoro", status: "idle", totalSeconds: 1500, pomodoro: { phase: "invalid", currentRound: 99 } }));
     expect(invalid?.pomodoro).toEqual({ phase: "focus", currentRound: 12, cycleId: null });
   });
