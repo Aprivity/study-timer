@@ -9,4 +9,9 @@ export interface FocusSession {
   startedAt: number;
   endedAt: number;
   status: FocusSessionStatus;
+  mode?: TimerMode;
+  cycleId?: string;
+  pomodoroRound?: number;
+  pomodoroRoundsTotal?: number;
 }
+import type { TimerMode } from "./pomodoro";

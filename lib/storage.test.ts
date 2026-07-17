@@ -16,7 +16,36 @@ describe("storage validation", () => {
       confirmEndEnabled: true,
       autoFullscreen: false,
       reduceMotion: false,
+      timerMode: "free",
+      pomodoro: {
+        focusMinutes: 25,
+        shortBreakMinutes: 5,
+        longBreakMinutes: 15,
+        roundsBeforeLongBreak: 4,
+        autoStartBreaks: false,
+        autoStartFocus: false,
+      },
     });
+  });
+  it("migrates V1 timer state to free mode without losing active time", () => {
+    const timer = parseTimer(JSON.stringify({ version: 1, status: "running", totalSeconds: 2700, remainingSeconds: 1200, endAt: 9999, taskName: "旧任务", category: "阅读" }));
+    expect(timer).toMatchObject({ version: 2, mode: "free", status: "running", remainingSeconds: 1200, taskName: "旧任务", pomodoro: null });
+  });
+  it("clamps invalid pomodoro settings", () => {
+    const settings = parseSettings(JSON.stringify({ timerMode: "pomodoro", pomodoro: { focusMinutes: 999, shortBreakMinutes: 0, longBreakMinutes: -2, roundsBeforeLongBreak: 40, autoStartBreaks: true } }));
+    expect(settings.timerMode).toBe("pomodoro");
+    expect(settings.pomodoro).toEqual({ focusMinutes: 180, shortBreakMinutes: 1, longBreakMinutes: 1, roundsBeforeLongBreak: 12, autoStartBreaks: true, autoStartFocus: false });
+  });
+  it("restores valid pomodoro phase state and falls back from invalid fields", () => {
+    const timer = parseTimer(JSON.stringify({ version: 2, mode: "pomodoro", status: "paused", totalSeconds: 300, remainingSeconds: 200, pomodoro: { phase: "short-break", currentRound: 2, cycleId: "cycle" } }));
+    expect(timer?.pomodoro).toEqual({ phase: "short-break", currentRound: 2, cycleId: "cycle" });
+    const invalid = parseTimer(JSON.stringify({ version: 2, mode: "pomodoro", status: "idle", totalSeconds: 1500, pomodoro: { phase: "invalid", currentRound: 99 } }));
+    expect(invalid?.pomodoro).toEqual({ phase: "focus", currentRound: 12, cycleId: null });
+  });
+  it("keeps legacy history records as free focus sessions", () => {
+    const sessions = parseSessions(JSON.stringify([{ id: "old", taskName: "旧记录", category: "数学", plannedSeconds: 60, focusedSeconds: 60, startedAt: 1, endedAt: 2, status: "completed" }]));
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].mode).toBeUndefined();
   });
   it("clamps corrupt timer remaining time", () => {
     const timer = parseTimer(JSON.stringify({ status: "paused", totalSeconds: 1500, remainingSeconds: 9999 }));

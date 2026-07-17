@@ -8,6 +8,7 @@ import { BackgroundSettingsPanel } from "@/components/background/BackgroundSetti
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { parseSettings, STORAGE_KEYS } from "@/lib/storage";
 import type { FocusSettings } from "@/types/settings";
+import { PomodoroSettingsSection } from "@/components/pomodoro/PomodoroSettingsSection";
 
 function ToggleSetting({ icon, title, description, checked, onChange }: {
   icon: ReactNode;
@@ -35,6 +36,7 @@ export default function SettingsPage() {
       <ToggleSetting icon={<Accessibility />} title="减少翻页动画" description="直接替换数字，不播放 3D 翻页动画。" checked={settings.reduceMotion} onChange={() => update("reduceMotion", !settings.reduceMotion)} />
       <div className="privacy-note"><ShieldCheck /><div><h2>你的数据留在本地</h2><p>计时状态、设置和历史保存在 localStorage；自定义背景图片保存在 IndexedDB。所有数据都不会上传。</p></div></div>
     </section>
+    <PomodoroSettingsSection settings={settings.pomodoro} onChange={(pomodoro) => update("pomodoro", pomodoro)} />
     <BackgroundSettingsPanel />
   </PageContainer>;
 }

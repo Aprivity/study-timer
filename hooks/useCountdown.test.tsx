@@ -33,4 +33,12 @@ describe("useCountdown", () => {
     expect(result.current.status).toBe("completed");
     expect(result.current.remainingSeconds).toBe(0);
   });
+
+  it("starts a new stage with its own duration without stale state", () => {
+    const { result } = renderHook(() => useCountdown(1500));
+    act(() => result.current.start(300));
+    expect(result.current.totalSeconds).toBe(300);
+    expect(result.current.remainingSeconds).toBe(300);
+    expect(result.current.endAt).toBe(Date.now() + 300_000);
+  });
 });

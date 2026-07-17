@@ -1,8 +1,11 @@
+import type { PomodoroCycleState, TimerMode } from "./pomodoro";
+
 export type TimerStatus = "idle" | "running" | "paused" | "completed";
 
 export interface PersistedTimer {
-  version: 1;
+  version: 2;
   status: TimerStatus;
+  mode: TimerMode;
   totalSeconds: number;
   remainingSeconds: number;
   endAt: number | null;
@@ -11,4 +14,5 @@ export interface PersistedTimer {
   category: string;
   sessionToken: string | null;
   savedSessionToken: string | null;
+  pomodoro: PomodoroCycleState | null;
 }
