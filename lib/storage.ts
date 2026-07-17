@@ -83,6 +83,7 @@ function isSession(value: unknown): value is FocusSession {
     finiteNumber(value.focusedSeconds) && finiteNumber(value.startedAt) &&
     finiteNumber(value.endedAt) && (value.status === "completed" || value.status === "stopped") &&
     (value.mode === undefined || value.mode === "free" || value.mode === "pomodoro") &&
+    (value.phase === undefined || value.phase === "focus") &&
     (value.cycleId === undefined || typeof value.cycleId === "string") &&
     (value.pomodoroRound === undefined || finiteNumber(value.pomodoroRound)) &&
     (value.pomodoroRoundsTotal === undefined || finiteNumber(value.pomodoroRoundsTotal));

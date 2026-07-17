@@ -25,11 +25,12 @@ describe("useCountdown", () => {
 
   it("restores an expired running timer at zero", () => {
     const { result } = renderHook(() => useCountdown(60));
-    act(() => result.current.restore({
+    const legacySnapshot = {
       version: 1, status: "running", totalSeconds: 60, remainingSeconds: 40,
       endAt: Date.now() - 1000, startedAt: Date.now() - 61_000,
       taskName: "恢复测试", category: "项目", sessionToken: "one", savedSessionToken: null,
-    }));
+    } as const;
+    act(() => result.current.restore(legacySnapshot));
     expect(result.current.status).toBe("completed");
     expect(result.current.remainingSeconds).toBe(0);
   });

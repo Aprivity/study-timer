@@ -53,6 +53,10 @@ describe("storage validation", () => {
     expect(sessions).toHaveLength(1);
     expect(sessions[0].mode).toBeUndefined();
   });
+  it("rejects accidental break-stage history records", () => {
+    const rest = { id: "rest", taskName: "休息", category: "其他", plannedSeconds: 300, focusedSeconds: 300, startedAt: 1, endedAt: 2, status: "completed", mode: "pomodoro", phase: "short-break" };
+    expect(parseSessions(JSON.stringify([rest]))).toEqual([]);
+  });
   it("clamps corrupt timer remaining time", () => {
     const timer = parseTimer(JSON.stringify({ status: "paused", totalSeconds: 1500, remainingSeconds: 9999 }));
     expect(timer?.remainingSeconds).toBe(1500);
