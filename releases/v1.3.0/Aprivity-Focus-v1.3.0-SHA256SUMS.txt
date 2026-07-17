@@ -1,2 +1,2 @@
-998efed263ec792dfefae9d9889b7f8ab16105d3a2ca9ab086bab14df3e95e01  Aprivity-Focus-v1.3.0-source.zip
+332ad7eeadd1be3bbd2439f2238aadccc29914d64b3a4bf34b2563692a4808b0  Aprivity-Focus-v1.3.0-source.zip
 1f43c5fbfb7f1d72e9d461fdf7a7a1f3f6499a3fb8d61720328fd4d475afe5e5  Aprivity-Focus-v1.3.0-static.zip
