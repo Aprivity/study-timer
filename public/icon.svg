@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Aprivity Focus">
+  <rect width="128" height="128" rx="28" fill="#151f19"/>
+  <circle cx="64" cy="64" r="42" fill="none" stroke="#29372f" stroke-width="8"/>
+  <path d="M64 22a42 42 0 0 1 36.4 63" fill="none" stroke="#8faa96" stroke-width="8" stroke-linecap="round"/>
+  <path d="M47 72c9-2 20-11 29-27 5 20-1 35-18 39-8 2-15-3-16-10 0-1 2-2 5-2Z" fill="#b9cbbb"/>
+  <path d="M48 84c6-12 15-20 28-27" fill="none" stroke="#647b69" stroke-width="4" stroke-linecap="round"/>
+</svg>

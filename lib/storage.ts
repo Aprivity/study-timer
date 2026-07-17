@@ -12,6 +12,7 @@ export const STORAGE_KEYS = {
 
 export const DEFAULT_SETTINGS: FocusSettings = {
   soundEnabled: true,
+  notificationsEnabled: false,
   defaultDurationMinutes: 45,
   confirmEndEnabled: true,
   autoFullscreen: false,
@@ -70,6 +71,7 @@ export function parseTimer(raw: string | null, fallbackSeconds = 2700): Persiste
     category: typeof value.category === "string" ? value.category : "其他",
     sessionToken: typeof value.sessionToken === "string" ? value.sessionToken : null,
     savedSessionToken: typeof value.savedSessionToken === "string" ? value.savedSessionToken : null,
+    notifiedToken: typeof value.notifiedToken === "string" ? value.notifiedToken : null,
     pomodoro: mode === "pomodoro" ? parsePomodoroState(value.pomodoro) : null,
   };
 }
@@ -100,6 +102,7 @@ export function parseSettings(raw: string | null): FocusSettings {
   const pomodoro = isRecord(value.pomodoro) ? value.pomodoro : {};
   return {
     soundEnabled: typeof value.soundEnabled === "boolean" ? value.soundEnabled : DEFAULT_SETTINGS.soundEnabled,
+    notificationsEnabled: typeof value.notificationsEnabled === "boolean" ? value.notificationsEnabled : DEFAULT_SETTINGS.notificationsEnabled,
     defaultDurationMinutes: duration,
     confirmEndEnabled: typeof value.confirmEndEnabled === "boolean" ? value.confirmEndEnabled : DEFAULT_SETTINGS.confirmEndEnabled,
     autoFullscreen: typeof value.autoFullscreen === "boolean" ? value.autoFullscreen : DEFAULT_SETTINGS.autoFullscreen,

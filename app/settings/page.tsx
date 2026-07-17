@@ -9,6 +9,7 @@ import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { parseSettings, STORAGE_KEYS } from "@/lib/storage";
 import type { FocusSettings } from "@/types/settings";
 import { PomodoroSettingsSection } from "@/components/pomodoro/PomodoroSettingsSection";
+import { NotificationSetting } from "@/components/settings/NotificationSetting";
 
 function ToggleSetting({ icon, title, description, checked, onChange }: {
   icon: ReactNode;
@@ -31,6 +32,7 @@ export default function SettingsPage() {
     <section className="settings-list" aria-busy={!hydrated}>
       <div className="setting-row"><span className="setting-icon" aria-hidden="true"><Clock3 /></span><div><h2>默认专注时长</h2><p>完成或放弃一次计时后，新专注默认使用的时长。</p></div><select aria-label="默认专注时长" value={settings.defaultDurationMinutes} onChange={(e) => update("defaultDurationMinutes", Number(e.target.value))}><option value={25}>25 分钟</option><option value={45}>45 分钟</option><option value={60}>60 分钟</option><option value={80}>80 分钟</option></select></div>
       <ToggleSetting icon={<BellRing />} title="完成提示音" description="专注结束时播放一段轻柔提示音；播放受限时不会影响计时。" checked={settings.soundEnabled} onChange={() => update("soundEnabled", !settings.soundEnabled)} />
+      <NotificationSetting enabled={settings.notificationsEnabled} onChange={(enabled) => update("notificationsEnabled", enabled)} />
       <ToggleSetting icon={<ShieldAlert />} title="提前结束确认" description="结束未完成的专注前，询问保存、放弃或继续。" checked={settings.confirmEndEnabled} onChange={() => update("confirmEndEnabled", !settings.confirmEndEnabled)} />
       <ToggleSetting icon={<Maximize2 />} title="开始时自动全屏" description="开始专注时尝试进入浏览器全屏；被拒绝时保持正常模式。" checked={settings.autoFullscreen} onChange={() => update("autoFullscreen", !settings.autoFullscreen)} />
       <ToggleSetting icon={<Accessibility />} title="减少翻页动画" description="直接替换数字，不播放 3D 翻页动画。" checked={settings.reduceMotion} onChange={() => update("reduceMotion", !settings.reduceMotion)} />

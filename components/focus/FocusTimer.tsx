@@ -11,6 +11,7 @@ import { getNextPomodoroState, getPhaseDurationSeconds, getPomodoroPhaseLabel, I
 import { calculateRemainingSeconds } from "@/lib/timer";
 import { addSessionUnique, createStoppedSession } from "@/lib/sessions";
 import { formatDuration } from "@/lib/time-format";
+import { createCompletionNotification, getNotificationPermission, isNotificationSupported, sendBrowserNotification, shouldSendDesktopNotification } from "@/lib/notifications";
 import type { FocusSession } from "@/types/focus-session";
 import type { PomodoroCycleState, PomodoroPhase, TimerMode } from "@/types/pomodoro";
 import type { PersistedTimer } from "@/types/timer";
@@ -56,7 +57,7 @@ export function FocusTimer() {
   const restoreTimer = timer.restore; const setTimerDuration = timer.setDuration; const restoreCycle = cycle.restore;
   const [mode, setMode] = useState<TimerMode>("free");
   const [taskName, setTaskName] = useState(""); const [category, setCategory] = useState("数学");
-  const [startedAt, setStartedAt] = useState<number | null>(null); const [sessionToken, setSessionToken] = useState<string | null>(null); const [savedSessionToken, setSavedSessionToken] = useState<string | null>(null);
+  const [startedAt, setStartedAt] = useState<number | null>(null); const [sessionToken, setSessionToken] = useState<string | null>(null); const [savedSessionToken, setSavedSessionToken] = useState<string | null>(null); const [notifiedToken, setNotifiedToken] = useState<string | null>(null);
   const [ready, setReady] = useState(false); const [endDialogOpen, setEndDialogOpen] = useState(false); const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
   const [transition, setTransition] = useState<TransitionState | null>(null);
   const resumeAfterDialog = useRef(false);
@@ -69,7 +70,7 @@ export function FocusTimer() {
       if (persistedTimer) {
         restoreTimer(persistedTimer); setMode(persistedTimer.mode); restoreCycle(persistedTimer.pomodoro);
         setTaskName(persistedTimer.taskName); setCategory(persistedTimer.category); setStartedAt(persistedTimer.startedAt);
-        setSessionToken(persistedTimer.sessionToken); setSavedSessionToken(persistedTimer.savedSessionToken);
+        setSessionToken(persistedTimer.sessionToken); setSavedSessionToken(persistedTimer.savedSessionToken); setNotifiedToken(persistedTimer.notifiedToken);
       } else {
         const initialMode = settings.timerMode; setMode(initialMode); restoreCycle(null);
         setTimerDuration(initialMode === "pomodoro" ? settings.pomodoro.focusMinutes * 60 : settings.defaultDurationMinutes * 60);
@@ -83,11 +84,11 @@ export function FocusTimer() {
     if (!ready) return;
     const snapshot: PersistedTimer = {
       version: 2, status: timer.status, mode, totalSeconds: timer.totalSeconds, remainingSeconds: timer.remainingSeconds,
-      endAt: timer.endAt, startedAt, taskName, category, sessionToken, savedSessionToken,
+      endAt: timer.endAt, startedAt, taskName, category, sessionToken, savedSessionToken, notifiedToken,
       pomodoro: mode === "pomodoro" ? cycle.state : null,
     };
     setPersistedTimer(snapshot);
-  }, [category, cycle.state, mode, ready, savedSessionToken, sessionToken, setPersistedTimer, startedAt, taskName, timer.endAt, timer.remainingSeconds, timer.status, timer.totalSeconds]);
+  }, [category, cycle.state, mode, notifiedToken, ready, savedSessionToken, sessionToken, setPersistedTimer, startedAt, taskName, timer.endAt, timer.remainingSeconds, timer.status, timer.totalSeconds]);
 
   const enterPomodoroStage = useCallback((nextState: PomodoroCycleState, completedPhase: PomodoroPhase | null, completedRound: number, showDialog: boolean) => {
     const autoStart = shouldAutoStartNextPhase(nextState.phase, settings.pomodoro);
@@ -121,15 +122,29 @@ export function FocusTimer() {
       setSavedSessionToken(sessionToken);
       if (settings.soundEnabled) playCompleteTone();
       if (settings.autoFullscreen && document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-      if (mode === "free") setCompleteDialogOpen(true);
-      else {
+      if (mode === "free") {
+        setCompleteDialogOpen(true);
+        if (notifiedToken !== sessionToken) {
+          setNotifiedToken(sessionToken);
+          if (shouldSendDesktopNotification({ enabled: settings.notificationsEnabled, supported: isNotificationSupported(), permission: getNotificationPermission(), visibilityState: document.visibilityState })) {
+            sendBrowserNotification(createCompletionNotification({ mode, completedPhase, completedRound: 1, totalSeconds: timer.totalSeconds, taskName, eventToken: sessionToken }));
+          }
+        }
+      } else {
         const completedRound = cycle.state.currentRound;
         const next = getNextPomodoroState(cycle.state, settings.pomodoro);
+        const autoStarted = shouldAutoStartNextPhase(next.phase, settings.pomodoro);
         enterPomodoroStage(next, completedPhase, completedRound, true);
+        if (notifiedToken !== sessionToken) {
+          setNotifiedToken(sessionToken);
+          if (shouldSendDesktopNotification({ enabled: settings.notificationsEnabled, supported: isNotificationSupported(), permission: getNotificationPermission(), visibilityState: document.visibilityState })) {
+            sendBrowserNotification(createCompletionNotification({ mode, completedPhase, completedRound, totalSeconds: timer.totalSeconds, taskName, eventToken: sessionToken, nextState: next, pomodoro: settings.pomodoro, autoStarted }));
+          }
+        }
       }
     });
     return () => { active = false; };
-  }, [category, cycle.state, enterPomodoroStage, mode, ready, savedSessionToken, sessionToken, setSessions, settings.autoFullscreen, settings.pomodoro, settings.soundEnabled, startedAt, taskName, timer.remainingSeconds, timer.status, timer.totalSeconds]);
+  }, [category, cycle.state, enterPomodoroStage, mode, notifiedToken, ready, savedSessionToken, sessionToken, setSessions, settings.autoFullscreen, settings.notificationsEnabled, settings.pomodoro, settings.soundEnabled, startedAt, taskName, timer.remainingSeconds, timer.status, timer.totalSeconds]);
 
   useEffect(() => {
     const cleanTask = taskName.trim() || "未命名专注";
@@ -148,19 +163,19 @@ export function FocusTimer() {
     setMode(nextMode); setSettings({ ...settings, timerMode: nextMode }); setTransition(null); setCompleteDialogOpen(false);
     if (nextMode === "pomodoro") { restoreCycle(null); timer.reset(settings.pomodoro.focusMinutes * 60); }
     else { restoreCycle(null); timer.reset(settings.defaultDurationMinutes * 60); }
-    setStartedAt(null); setSessionToken(null); setSavedSessionToken(null);
+    setStartedAt(null); setSessionToken(null); setSavedSessionToken(null); setNotifiedToken(null);
   };
 
   const begin = () => {
     if (timer.status !== "idle") return;
     if (mode === "pomodoro" && cycle.state.phase === "focus" && !cycle.state.cycleId) restoreCycle({ ...cycle.state, cycleId: createId() });
     if (settings.autoFullscreen && (mode === "free" || cycle.state.phase === "focus") && !document.fullscreenElement && document.documentElement.requestFullscreen) void document.documentElement.requestFullscreen().catch(() => undefined);
-    setStartedAt(Date.now()); setSessionToken(createId()); setSavedSessionToken(null); setCompleteDialogOpen(false); setTransition(null);
+    setStartedAt(Date.now()); setSessionToken(createId()); setSavedSessionToken(null); setNotifiedToken(null); setCompleteDialogOpen(false); setTransition(null);
     timer.start(mode === "pomodoro" ? getPhaseDurationSeconds(cycle.state.phase, settings.pomodoro) : timer.totalSeconds);
   };
 
   const resetPomodoroCycle = () => {
-    cycle.reset(); timer.reset(settings.pomodoro.focusMinutes * 60); setStartedAt(null); setSessionToken(null); setSavedSessionToken(null); setTransition(null); setCompleteDialogOpen(false); setEndDialogOpen(false);
+    cycle.reset(); timer.reset(settings.pomodoro.focusMinutes * 60); setStartedAt(null); setSessionToken(null); setSavedSessionToken(null); setNotifiedToken(null); setTransition(null); setCompleteDialogOpen(false); setEndDialogOpen(false);
   };
   const requestEnd = () => {
     if (!settings.confirmEndEnabled) {
@@ -188,7 +203,7 @@ export function FocusTimer() {
     }
     if (settings.autoFullscreen && document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
   };
-  const startNewFocus = () => { timer.reset(settings.defaultDurationMinutes * 60); setStartedAt(null); setSessionToken(null); setSavedSessionToken(null); setCompleteDialogOpen(false); };
+  const startNewFocus = () => { timer.reset(settings.defaultDurationMinutes * 60); setStartedAt(null); setSessionToken(null); setSavedSessionToken(null); setNotifiedToken(null); setCompleteDialogOpen(false); };
   const skipBreak = () => {
     if (mode !== "pomodoro" || cycle.state.phase === "focus") return;
     const next = getNextPomodoroState(cycle.state, settings.pomodoro); enterPomodoroStage(next, null, cycle.state.currentRound, false);
