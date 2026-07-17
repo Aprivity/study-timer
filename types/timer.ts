@@ -14,5 +14,6 @@ export interface PersistedTimer {
   category: string;
   sessionToken: string | null;
   savedSessionToken: string | null;
+  notifiedToken: string | null;
   pomodoro: PomodoroCycleState | null;
 }
