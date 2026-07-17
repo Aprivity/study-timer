@@ -50,7 +50,9 @@ describe("NotificationSetting", () => {
       return hydrated ? <NotificationSetting enabled={settings.notificationsEnabled} onChange={(enabled) => setSettings({ ...settings, notificationsEnabled: enabled })} /> : null;
     }
     render(<Harness />);
-    fireEvent.click(await screen.findByRole("switch", { name: "桌面通知" }));
+    const toggle = await screen.findByRole("switch", { name: "桌面通知" });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    fireEvent.click(toggle);
     await waitFor(() => {
       const saved = parseSettings(window.localStorage.getItem(STORAGE_KEYS.settings));
       expect(saved.notificationsEnabled).toBe(true);
