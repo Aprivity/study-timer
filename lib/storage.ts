@@ -78,25 +78,55 @@ export function parseTimer(raw: string | null, fallbackSeconds = 2700): Persiste
 
 function isSession(value: unknown): value is FocusSession {
   if (!isRecord(value)) return false;
-  return typeof value.id === "string" && typeof value.taskName === "string" &&
-    typeof value.category === "string" && finiteNumber(value.plannedSeconds) &&
-    finiteNumber(value.focusedSeconds) && finiteNumber(value.startedAt) &&
-    finiteNumber(value.endedAt) && (value.status === "completed" || value.status === "stopped") &&
+  return typeof value.id === "string" && value.id.length > 0 && value.id.length <= 128 &&
+    typeof value.taskName === "string" && value.taskName.length <= 120 &&
+    typeof value.category === "string" && value.category.length > 0 && value.category.length <= 60 &&
+    finiteNumber(value.plannedSeconds) && value.plannedSeconds >= 0 && value.plannedSeconds <= 43200 &&
+    finiteNumber(value.focusedSeconds) && value.focusedSeconds >= 0 && value.focusedSeconds <= 43200 &&
+    finiteNumber(value.startedAt) && value.startedAt >= 0 &&
+    finiteNumber(value.endedAt) && value.endedAt >= value.startedAt &&
+    (value.status === "completed" || value.status === "stopped") &&
     (value.mode === undefined || value.mode === "free" || value.mode === "pomodoro") &&
     (value.phase === undefined || value.phase === "focus") &&
-    (value.cycleId === undefined || typeof value.cycleId === "string") &&
-    (value.pomodoroRound === undefined || finiteNumber(value.pomodoroRound)) &&
-    (value.pomodoroRoundsTotal === undefined || finiteNumber(value.pomodoroRoundsTotal));
+    (value.cycleId === undefined || (typeof value.cycleId === "string" && value.cycleId.length <= 128)) &&
+    (value.pomodoroRound === undefined || (finiteNumber(value.pomodoroRound) && value.pomodoroRound >= 1 && value.pomodoroRound <= 12)) &&
+    (value.pomodoroRoundsTotal === undefined || (finiteNumber(value.pomodoroRoundsTotal) && value.pomodoroRoundsTotal >= 2 && value.pomodoroRoundsTotal <= 12));
+}
+
+function cleanSession(value: FocusSession): FocusSession {
+  return {
+    id: value.id,
+    taskName: value.taskName,
+    category: value.category,
+    plannedSeconds: Math.round(value.plannedSeconds),
+    focusedSeconds: Math.round(value.focusedSeconds),
+    startedAt: Math.round(value.startedAt),
+    endedAt: Math.round(value.endedAt),
+    status: value.status,
+    mode: value.mode,
+    cycleId: value.cycleId,
+    pomodoroRound: value.pomodoroRound === undefined ? undefined : Math.round(value.pomodoroRound),
+    pomodoroRoundsTotal: value.pomodoroRoundsTotal === undefined ? undefined : Math.round(value.pomodoroRoundsTotal),
+  };
+}
+
+export function validateSessions(value: unknown): { sessions: FocusSession[]; invalidCount: number } {
+  if (!Array.isArray(value)) return { sessions: [], invalidCount: 0 };
+  const sessions: FocusSession[] = [];
+  let invalidCount = 0;
+  for (const item of value) {
+    if (isSession(item)) sessions.push(cleanSession(item));
+    else invalidCount += 1;
+  }
+  return { sessions, invalidCount };
 }
 
 export function parseSessions(raw: string | null): FocusSession[] {
   const value = parse(raw);
-  if (!Array.isArray(value)) return [];
-  return value.filter(isSession).map((s) => ({ ...s, focusedSeconds: Math.max(0, s.focusedSeconds) }));
+  return validateSessions(value).sessions;
 }
 
-export function parseSettings(raw: string | null): FocusSettings {
-  const value = parse(raw);
+export function validateSettings(value: unknown): FocusSettings {
   if (!isRecord(value)) return DEFAULT_SETTINGS;
   const duration = finiteNumber(value.defaultDurationMinutes) && value.defaultDurationMinutes >= 1 && value.defaultDurationMinutes <= 720
     ? Math.round(value.defaultDurationMinutes) : DEFAULT_SETTINGS.defaultDurationMinutes;
@@ -118,6 +148,10 @@ export function parseSettings(raw: string | null): FocusSettings {
       autoStartFocus: typeof pomodoro.autoStartFocus === "boolean" ? pomodoro.autoStartFocus : DEFAULT_POMODORO_SETTINGS.autoStartFocus,
     },
   };
+}
+
+export function parseSettings(raw: string | null): FocusSettings {
+  return validateSettings(parse(raw));
 }
 
 export function readStorage<T>(key: string, parser: (raw: string | null) => T): T {

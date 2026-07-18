@@ -10,6 +10,7 @@ import { parseSettings, STORAGE_KEYS } from "@/lib/storage";
 import type { FocusSettings } from "@/types/settings";
 import { PomodoroSettingsSection } from "@/components/pomodoro/PomodoroSettingsSection";
 import { NotificationSetting } from "@/components/settings/NotificationSetting";
+import { DataManagementSection } from "@/components/settings/DataManagementSection";
 
 function ToggleSetting({ icon, title, description, checked, onChange }: {
   icon: ReactNode;
@@ -40,5 +41,6 @@ export default function SettingsPage() {
     </section>
     <PomodoroSettingsSection settings={settings.pomodoro} onChange={(pomodoro) => update("pomodoro", pomodoro)} />
     <BackgroundSettingsPanel />
+    <DataManagementSection />
   </PageContainer>;
 }
