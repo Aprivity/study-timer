@@ -57,8 +57,8 @@ describe("browser notification service", () => {
   });
 
   it("uses local and GitHub Pages icon paths", () => {
-    expect(getNotificationIconPath(false)).toBe("/icon.svg");
-    expect(getNotificationIconPath(true)).toBe("/study-timer/icon.svg");
+    expect(getNotificationIconPath("")).toBe("/icon.svg");
+    expect(getNotificationIconPath("/study-timer")).toBe("/study-timer/icon.svg");
   });
 
   it("focuses the page and closes the notification when clicked", () => {

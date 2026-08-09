@@ -71,8 +71,8 @@ export function shouldSendDesktopNotification(policy: DesktopNotificationPolicy)
   return policy.enabled && policy.supported && policy.permission === "granted" && policy.visibilityState === "hidden";
 }
 
-export function getNotificationIconPath(production = process.env.NODE_ENV === "production"): string {
-  return `${production ? "/study-timer" : ""}/icon.svg`;
+export function getNotificationIconPath(basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ""): string {
+  return `${basePath}/icon.svg`;
 }
 
 export function sendBrowserNotification(options: BrowserNotificationOptions): boolean {
