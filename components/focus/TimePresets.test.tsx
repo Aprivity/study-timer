@@ -11,4 +11,12 @@ describe("TimePresets", () => {
     fireEvent.click(screen.getByRole("button", { name: "25 分钟" }));
     expect(onSelect).not.toHaveBeenCalled();
   });
+
+  it("shows an externally selected non-preset duration as custom", () => {
+    const { rerender } = render(<TimePresets key={45} selectedMinutes={45} disabled={false} onSelect={vi.fn()} />);
+    rerender(<TimePresets key={37} selectedMinutes={37} disabled={false} onSelect={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "自定义" })).toHaveClass("active");
+    expect(screen.getByLabelText("分钟")).toHaveValue(37);
+  });
 });

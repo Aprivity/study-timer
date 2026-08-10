@@ -13,6 +13,7 @@ import { addSessionUnique, createStoppedSession } from "@/lib/sessions";
 import { formatDuration } from "@/lib/time-format";
 import { createCompletionNotification, getNotificationPermission, isNotificationSupported, sendBrowserNotification, shouldSendDesktopNotification } from "@/lib/notifications";
 import type { FocusSession } from "@/types/focus-session";
+import type { FocusParseResult } from "@/types/focus-ai";
 import type { PomodoroCycleState, PomodoroPhase, TimerMode } from "@/types/pomodoro";
 import type { PersistedTimer } from "@/types/timer";
 import { CompleteDialog } from "@/components/dialogs/CompleteDialog";
@@ -23,6 +24,7 @@ import { PomodoroTransitionDialog } from "@/components/pomodoro/PomodoroTransiti
 import { TimerModeSelector } from "@/components/pomodoro/TimerModeSelector";
 import { TodaySummary } from "@/components/stats/TodaySummary";
 import { FlipClock } from "./FlipClock";
+import { AiFocusInput } from "./AiFocusInput";
 import { ProgressRing } from "./ProgressRing";
 import { TaskInput } from "./TaskInput";
 import { TimePresets } from "./TimePresets";
@@ -214,6 +216,12 @@ export function FocusTimer() {
   };
 
   const locked = timer.status === "running" || timer.status === "paused";
+  const applyAiFocusResult = (result: FocusParseResult): boolean => {
+    if (mode !== "free" || timer.status !== "idle") return false;
+    if (result.task_name !== null) setTaskName(result.task_name);
+    if (result.duration_minutes !== null) timer.setDuration(result.duration_minutes * 60);
+    return true;
+  };
   const canEditTask = timer.status === "idle" && (mode === "free" || (cycle.state.phase === "focus" && cycle.state.currentRound === 1 && !cycle.state.cycleId));
   const statusText = mode === "free"
     ? timer.status === "idle" ? "准备开始一次专注" : timer.status === "running" ? "当前专注" : timer.status === "paused" ? "专注已暂停" : "本次专注已结束"
@@ -226,11 +234,12 @@ export function FocusTimer() {
       <TimerModeSelector mode={mode} disabled={timer.status !== "idle"} onChange={changeMode} />
       <div className="focus-heading"><p className="focus-status"><Focus size={14} />{statusText}</p><h1>{locked || timer.status === "completed" || (mode === "pomodoro" && cycle.state.cycleId) ? (taskName.trim() || "未命名专注") : "把注意力留给当下"}</h1></div>
       {canEditTask && <TaskInput taskName={taskName} category={category} disabled={false} onTaskChange={setTaskName} onCategoryChange={setCategory} />}
+      {mode === "free" && <AiFocusInput disabled={timer.status !== "idle"} onParsed={applyAiFocusResult} />}
       {mode === "pomodoro" && <PomodoroPhaseHeader state={cycle.state} settings={settings.pomodoro} />}
       <ProgressRing progress={progress} status={timer.status} phase={mode === "pomodoro" ? cycle.state.phase : undefined}><FlipClock seconds={timer.remainingSeconds} animate={timer.status === "running" && !settings.reduceMotion} /><p className="ring-caption">{timer.status === "paused" ? "时间已经为你停下" : mode === "pomodoro" ? `${getPomodoroPhaseLabel(cycle.state.phase)} · ${Math.round(timer.totalSeconds / 60)} 分钟` : timer.status === "running" ? "保持呼吸，继续向前" : timer.status === "completed" ? (timer.remainingSeconds === 0 ? "专注已完成并记录" : "实际专注时长已保存") : `${Math.round(timer.totalSeconds / 60)} 分钟专注`}</p></ProgressRing>
       {mode === "free" ? <TimerControls status={timer.status} onStart={begin} onPause={timer.pause} onResume={timer.resume} onEnd={requestEnd} onReset={startNewFocus} onHistory={() => router.push("/history")} /> : <PomodoroTimerControls status={timer.status} phase={cycle.state.phase} onStart={begin} onPause={timer.pause} onResume={timer.resume} onEndFocus={requestEnd} onSkipBreak={skipBreak} onResetCycle={resetPomodoroCycle} />}
       {mode === "pomodoro" && (cycle.state.cycleId || cycle.state.phase !== "focus" || cycle.state.currentRound > 1) && <button type="button" className="end-cycle-button" onClick={requestCycleReset}>结束番茄循环</button>}
-      {mode === "free" && timer.status === "idle" && <TimePresets selectedMinutes={Math.round(timer.totalSeconds / 60)} disabled={locked} onSelect={(minutes) => timer.setDuration(minutes * 60)} />}
+      {mode === "free" && timer.status === "idle" && <TimePresets key={timer.totalSeconds} selectedMinutes={Math.round(timer.totalSeconds / 60)} disabled={locked} onSelect={(minutes) => timer.setDuration(minutes * 60)} />}
       <TodaySummary sessions={sessions} />
     </section>
     <ConfirmEndDialog open={endDialogOpen} onSave={() => finishEarly(true)} onDiscard={() => finishEarly(false)} onContinue={continueFocus} />

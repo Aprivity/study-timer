@@ -44,6 +44,7 @@ jobs:
       - name: Build static export
         env:
           DEPLOY_TARGET: github-pages
+          NEXT_PUBLIC_AI_API_BASE_URL: ${{ vars.NEXT_PUBLIC_AI_API_BASE_URL }}
         run: npm run build
 
       - name: Upload GitHub Pages artifact
