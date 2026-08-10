@@ -1,14 +1,18 @@
 import type { NextConfig } from "next";
 
-const isProduction = process.env.NODE_ENV === "production";
 const repositoryBasePath = "/study-timer";
+const isGitHubPages = process.env.DEPLOY_TARGET === "github-pages";
+const deploymentBasePath = isGitHubPages ? repositoryBasePath : "";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: "export",
   trailingSlash: true,
-  basePath: isProduction ? repositoryBasePath : "",
-  assetPrefix: isProduction ? repositoryBasePath : "",
+  basePath: deploymentBasePath,
+  assetPrefix: deploymentBasePath,
+  env: {
+    NEXT_PUBLIC_BASE_PATH: deploymentBasePath,
+  },
   images: {
     unoptimized: true,
   },

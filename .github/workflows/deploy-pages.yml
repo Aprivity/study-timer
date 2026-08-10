@@ -42,6 +42,8 @@ jobs:
         run: npm run test
 
       - name: Build static export
+        env:
+          DEPLOY_TARGET: github-pages
         run: npm run build
 
       - name: Upload GitHub Pages artifact

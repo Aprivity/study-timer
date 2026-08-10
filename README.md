@@ -8,6 +8,8 @@ Aprivity Focus 是一个面向学生和个人学习场景的沉浸式倒计时�
 
 GitHub Pages 地址：[https://aprivity.github.io/study-timer/](https://aprivity.github.io/study-timer/)
 
+自有域名示例：[https://focus.aprivity.xyz](https://focus.aprivity.xyz)
+
 部署工作流合并到 `main` 并首次成功运行后，该地址开始提供服务。
 
 ## 功能
@@ -196,9 +198,9 @@ npm run dev
 
 打开 [http://localhost:3000](http://localhost:3000)。
 
-本地开发不启用 `/study-timer` 基础路径；生产构建会自动使用该路径，以适配 GitHub Pages 项目站点。
+本地开发和普通生产构建都使用根路径 `/`。GitHub Pages 工作流会设置 `DEPLOY_TARGET=github-pages`，自动将 `basePath` 和 `assetPrefix` 切换为 `/study-timer`。
 
-生产构建：
+自有服务器生产构建：
 
 ```bash
 npm run lint
@@ -206,7 +208,13 @@ npm run test
 npm run build
 ```
 
-`output: "export"` 会将可部署站点生成到 `out/`，无需运行 Next.js 服务端。
+`output: "export"` 会将适合 Nginx 根路径托管的静态站点生成到 `out/`，无需运行 Next.js 服务端。不要为自有域名设置 `DEPLOY_TARGET=github-pages`。
+
+如需在本地复现 GitHub Pages 构建，可运行：
+
+```bash
+DEPLOY_TARGET=github-pages npm run build
+```
 
 ## 自动部署
 
@@ -215,8 +223,9 @@ npm run build
 1. 推送到 `main` 或手动触发 `workflow_dispatch`。
 2. 使用 `npm ci` 安装锁定依赖。
 3. 依次运行 ESLint、Vitest 和 Next.js 静态构建。
-4. 将生成的 `out/` 上传为 Pages artifact。
-5. 通过 `github-pages` environment 部署到 GitHub Pages。
+4. 构建步骤设置 `DEPLOY_TARGET=github-pages`，生成带 `/study-timer` 基础路径的静态站点。
+5. 将生成的 `out/` 上传为 Pages artifact。
+6. 通过 `github-pages` environment 部署到 GitHub Pages。
 
 部署采用并发控制，避免多个生产部署相互覆盖。工作流在 Draft PR 阶段不会部署；合并到 `main` 后才会自动执行。
 
