@@ -1,6 +1,5 @@
 import type { FocusParseResult } from "@/types/focus-ai";
-
-const DEFAULT_AI_API_BASE_URL = "/api";
+import { getAiApiBaseUrl } from "./ai-api";
 
 export type FocusApiErrorKind = "invalid-request" | "network" | "backend" | "invalid-response";
 
@@ -16,9 +15,7 @@ export class FocusApiError extends Error {
 }
 
 export function getFocusParseUrl(): string {
-  const configuredBaseUrl = process.env.NEXT_PUBLIC_AI_API_BASE_URL?.trim();
-  const baseUrl = (configuredBaseUrl || DEFAULT_AI_API_BASE_URL).replace(/\/+$/, "");
-  return `${baseUrl}/v1/focus/parse`;
+  return `${getAiApiBaseUrl()}/v1/focus/parse`;
 }
 
 function parseResponse(payload: unknown): FocusParseResult {

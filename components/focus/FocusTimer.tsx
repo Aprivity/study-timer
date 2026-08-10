@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Focus, Leaf } from "lucide-react";
 import { useCountdown } from "@/hooks/useCountdown";
@@ -14,11 +14,13 @@ import { formatDuration } from "@/lib/time-format";
 import { createCompletionNotification, getNotificationPermission, isNotificationSupported, sendBrowserNotification, shouldSendDesktopNotification } from "@/lib/notifications";
 import type { FocusSession } from "@/types/focus-session";
 import type { FocusParseResult } from "@/types/focus-ai";
+import type { PomodoroParseResult } from "@/types/pomodoro-ai";
 import type { PomodoroCycleState, PomodoroPhase, TimerMode } from "@/types/pomodoro";
 import type { PersistedTimer } from "@/types/timer";
 import { CompleteDialog } from "@/components/dialogs/CompleteDialog";
 import { ConfirmEndDialog } from "@/components/dialogs/ConfirmEndDialog";
 import { PomodoroPhaseHeader } from "@/components/pomodoro/PomodoroPhaseHeader";
+import { AiPomodoroInput } from "@/components/pomodoro/AiPomodoroInput";
 import { PomodoroTimerControls } from "@/components/pomodoro/PomodoroTimerControls";
 import { PomodoroTransitionDialog } from "@/components/pomodoro/PomodoroTransitionDialog";
 import { TimerModeSelector } from "@/components/pomodoro/TimerModeSelector";
@@ -63,6 +65,10 @@ export function FocusTimer() {
   const [ready, setReady] = useState(false); const [endDialogOpen, setEndDialogOpen] = useState(false); const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
   const [transition, setTransition] = useState<TransitionState | null>(null);
   const resumeAfterDialog = useRef(false);
+  const liveConfigurationState = useRef({ mode, status: timer.status, cycle: cycle.state });
+  useLayoutEffect(() => {
+    liveConfigurationState.current = { mode, status: timer.status, cycle: cycle.state };
+  }, [cycle.state, mode, timer.status]);
 
   useEffect(() => {
     if (!timerHydrated || !settingsHydrated || ready) return;
@@ -216,10 +222,27 @@ export function FocusTimer() {
   };
 
   const locked = timer.status === "running" || timer.status === "paused";
+  const canConfigurePomodoro = mode === "pomodoro" && timer.status === "idle" && cycle.state.phase === "focus" && cycle.state.currentRound === 1 && !cycle.state.cycleId;
   const applyAiFocusResult = (result: FocusParseResult): boolean => {
-    if (mode !== "free" || timer.status !== "idle") return false;
+    const liveState = liveConfigurationState.current;
+    if (liveState.mode !== "free" || liveState.status !== "idle") return false;
     if (result.task_name !== null) setTaskName(result.task_name);
     if (result.duration_minutes !== null) timer.setDuration(result.duration_minutes * 60);
+    return true;
+  };
+  const applyAiPomodoroResult = (result: PomodoroParseResult): boolean => {
+    const liveState = liveConfigurationState.current;
+    if (liveState.mode !== "pomodoro" || liveState.status !== "idle" || liveState.cycle.phase !== "focus" || liveState.cycle.currentRound !== 1 || liveState.cycle.cycleId) return false;
+    const nextPomodoro = {
+      ...settings.pomodoro,
+      focusMinutes: result.focus_minutes ?? settings.pomodoro.focusMinutes,
+      shortBreakMinutes: result.short_break_minutes ?? settings.pomodoro.shortBreakMinutes,
+      roundsBeforeLongBreak: result.rounds ?? settings.pomodoro.roundsBeforeLongBreak,
+      longBreakMinutes: result.long_break_minutes ?? settings.pomodoro.longBreakMinutes,
+    };
+    if (result.task_name !== null) setTaskName(result.task_name);
+    setSettings({ ...settings, pomodoro: nextPomodoro });
+    if (result.focus_minutes !== null) timer.setDuration(result.focus_minutes * 60);
     return true;
   };
   const canEditTask = timer.status === "idle" && (mode === "free" || (cycle.state.phase === "focus" && cycle.state.currentRound === 1 && !cycle.state.cycleId));
@@ -235,6 +258,7 @@ export function FocusTimer() {
       <div className="focus-heading"><p className="focus-status"><Focus size={14} />{statusText}</p><h1>{locked || timer.status === "completed" || (mode === "pomodoro" && cycle.state.cycleId) ? (taskName.trim() || "未命名专注") : "把注意力留给当下"}</h1></div>
       {canEditTask && <TaskInput taskName={taskName} category={category} disabled={false} onTaskChange={setTaskName} onCategoryChange={setCategory} />}
       {mode === "free" && <AiFocusInput disabled={timer.status !== "idle"} onParsed={applyAiFocusResult} />}
+      {mode === "pomodoro" && <AiPomodoroInput disabled={!canConfigurePomodoro} onParsed={applyAiPomodoroResult} />}
       {mode === "pomodoro" && <PomodoroPhaseHeader state={cycle.state} settings={settings.pomodoro} />}
       <ProgressRing progress={progress} status={timer.status} phase={mode === "pomodoro" ? cycle.state.phase : undefined}><FlipClock seconds={timer.remainingSeconds} animate={timer.status === "running" && !settings.reduceMotion} /><p className="ring-caption">{timer.status === "paused" ? "时间已经为你停下" : mode === "pomodoro" ? `${getPomodoroPhaseLabel(cycle.state.phase)} · ${Math.round(timer.totalSeconds / 60)} 分钟` : timer.status === "running" ? "保持呼吸，继续向前" : timer.status === "completed" ? (timer.remainingSeconds === 0 ? "专注已完成并记录" : "实际专注时长已保存") : `${Math.round(timer.totalSeconds / 60)} 分钟专注`}</p></ProgressRing>
       {mode === "free" ? <TimerControls status={timer.status} onStart={begin} onPause={timer.pause} onResume={timer.resume} onEnd={requestEnd} onReset={startNewFocus} onHistory={() => router.push("/history")} /> : <PomodoroTimerControls status={timer.status} phase={cycle.state.phase} onStart={begin} onPause={timer.pause} onResume={timer.resume} onEndFocus={requestEnd} onSkipBreak={skipBreak} onResetCycle={resetPomodoroCycle} />}
