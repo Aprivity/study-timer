@@ -2,7 +2,7 @@
 
 Aprivity Focus 是一个面向学生和个人学习场景的沉浸式倒计时网页。它采用安静克制的 Forest Sage 视觉语言，围绕“填写任务 → 选择时长 → 专注 → 保存记录 → 查看统计”的单一流程设计。
 
-> 核心计时、历史、统计和设置完全运行在浏览器中，不需要账号或数据库。可选的 AI Focus 输入依赖独立 AI Backend。
+> 核心计时、历史、统计和设置完全运行在浏览器中，不需要账号或数据库。可选的 AI 设置输入依赖独立 AI Backend。
 
 ## 在线访问
 
@@ -24,6 +24,7 @@ GitHub Pages 地址：[https://aprivity.github.io/study-timer/](https://aprivity
 - 原生 CSS 3D 翻页时钟，支持 `MM:SS` 和 `HH:MM:SS`
 - 25、45、60、80 分钟预设与 1–720 分钟自定义时长
 - AI Focus 自然语言输入，可在自由专注空闲状态自动填写任务名称和时长
+- AI Pomodoro 自然语言输入，可在新循环开始前填写任务、时长、休息和轮数
 - 任务名称和数学、英语、项目、阅读、其他分类
 - localStorage 学习记录，完成记录 UUID 防重复写入
 - 今日专注时长、完成次数和连续专注天数统计
@@ -48,7 +49,9 @@ GitHub Pages 地址：[https://aprivity.github.io/study-timer/](https://aprivity
 - 原生 SVG 与 CSS 3D Transform / Keyframes
 - Vitest、React Testing Library、jsdom
 
-## AI Focus 自然语言输入
+## AI 自然语言设置
+
+### 自由专注
 
 首页“自由专注”模式提供一个可选的 AI 输入框，例如输入“学习高数45分钟”。前端会调用 AI Backend：
 
@@ -62,10 +65,38 @@ Content-Type: application/json
 后端返回：
 
 ```json
-{"task_name":"学习高数","duration_minutes":45}
+{"task_name":"高数","duration_minutes":45}
 ```
 
-AI 结果只会在自由专注且计时器为 `idle` 时写入设置，绝不会自动开始计时。返回为 `null` 的字段保持用户当前设置不变；非预设时长会自动切换到“自定义”并显示真实分钟数。运行中或暂停中禁止提交和应用 AI 设置，番茄循环不使用该输入。
+AI 结果只会在自由专注且计时器为 `idle` 时写入设置，绝不会自动开始计时。返回为 `null` 的字段保持用户当前设置不变；非预设时长会自动切换到“自定义”并显示真实分钟数。运行中或暂停中禁止提交和应用 AI 设置。
+
+### 番茄循环
+
+首页“番茄循环”模式在新循环开始前提供独立 AI 输入，例如：
+
+```http
+POST /api/v1/pomodoro/parse
+Content-Type: application/json
+
+{"text":"物理笔记50分钟，休息10分钟，4轮，最后休息20分钟"}
+```
+
+后端返回：
+
+```json
+{
+  "task_name": "物理笔记",
+  "focus_minutes": 50,
+  "short_break_minutes": 10,
+  "rounds": 4,
+  "long_break_minutes": 20
+}
+```
+
+非 `null` 字段直接写入现有任务和番茄设置，`null` 字段保持当前设置不变。
+每轮专注时长会同步到首页倒计时；所有结果仍可在现有设置页手动修改。
+AI 填写后计时器保持 `idle`，只有用户点击“开始专注”才会创建并启动循环。
+运行中、暂停中以及已经进入循环后的阶段间空闲状态均禁止 AI 改写配置。
 
 前端不包含 OpenASI API Key，也没有新增 Next.js API Route、Server Action 或其他服务端代码。默认请求同源 `/api`，适合由 Nginx 将 `/api/` 反向代理到 AI Backend。也可以在构建时配置公开的后端基础地址：
 
@@ -73,7 +104,11 @@ AI 结果只会在自由专注且计时器为 `idle` 时写入设置，绝不会
 NEXT_PUBLIC_AI_API_BASE_URL=https://ai.example.com/api npm run build
 ```
 
-该变量只填写 API 基础路径，不包含 `/v1/focus/parse`。若前后端跨域，AI Backend 还需要允许网页域名的 CORS 请求。OpenASI API Key 只配置在 AI Backend 服务器。GitHub Pages 部署可通过仓库变量 `NEXT_PUBLIC_AI_API_BASE_URL` 指定可公开访问的后端；未配置时仍使用默认同源 `/api`。
+该变量只填写 API 基础路径，不包含 `/v1/focus/parse` 或
+`/v1/pomodoro/parse`。若前后端跨域，AI Backend 还需要允许网页域名的
+CORS 请求。OpenASI API Key 只配置在 AI Backend 服务器。GitHub Pages
+部署可通过仓库变量 `NEXT_PUBLIC_AI_API_BASE_URL` 指定可公开访问的后端；
+未配置时仍使用默认同源 `/api`。
 
 ## 背景系统
 
