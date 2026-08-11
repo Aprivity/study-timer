@@ -13,20 +13,18 @@ import { addSessionUnique, createStoppedSession } from "@/lib/sessions";
 import { formatDuration } from "@/lib/time-format";
 import { createCompletionNotification, getNotificationPermission, isNotificationSupported, sendBrowserNotification, shouldSendDesktopNotification } from "@/lib/notifications";
 import type { FocusSession } from "@/types/focus-session";
-import type { FocusParseResult } from "@/types/focus-ai";
-import type { PomodoroParseResult } from "@/types/pomodoro-ai";
 import type { PomodoroCycleState, PomodoroPhase, TimerMode } from "@/types/pomodoro";
+import type { TimerParseResult } from "@/types/timer-ai";
 import type { PersistedTimer } from "@/types/timer";
 import { CompleteDialog } from "@/components/dialogs/CompleteDialog";
 import { ConfirmEndDialog } from "@/components/dialogs/ConfirmEndDialog";
 import { PomodoroPhaseHeader } from "@/components/pomodoro/PomodoroPhaseHeader";
-import { AiPomodoroInput } from "@/components/pomodoro/AiPomodoroInput";
 import { PomodoroTimerControls } from "@/components/pomodoro/PomodoroTimerControls";
 import { PomodoroTransitionDialog } from "@/components/pomodoro/PomodoroTransitionDialog";
 import { TimerModeSelector } from "@/components/pomodoro/TimerModeSelector";
 import { TodaySummary } from "@/components/stats/TodaySummary";
 import { FlipClock } from "./FlipClock";
-import { AiFocusInput } from "./AiFocusInput";
+import { AiTimerInput } from "./AiTimerInput";
 import { ProgressRing } from "./ProgressRing";
 import { TaskInput } from "./TaskInput";
 import { TimePresets } from "./TimePresets";
@@ -223,16 +221,26 @@ export function FocusTimer() {
 
   const locked = timer.status === "running" || timer.status === "paused";
   const canConfigurePomodoro = mode === "pomodoro" && timer.status === "idle" && cycle.state.phase === "focus" && cycle.state.currentRound === 1 && !cycle.state.cycleId;
-  const applyAiFocusResult = (result: FocusParseResult): boolean => {
+  const canUseAi = timer.status === "idle" && (mode === "free" || canConfigurePomodoro);
+  const applyAiTimerResult = (result: TimerParseResult): boolean => {
     const liveState = liveConfigurationState.current;
-    if (liveState.mode !== "free" || liveState.status !== "idle") return false;
+    const currentPomodoroIsConfigurable = liveState.mode !== "pomodoro" || (liveState.cycle.phase === "focus" && liveState.cycle.currentRound === 1 && !liveState.cycle.cycleId);
+    if (liveState.status !== "idle" || !currentPomodoroIsConfigurable) return false;
+
     if (result.task_name !== null) setTaskName(result.task_name);
-    if (result.duration_minutes !== null) timer.setDuration(result.duration_minutes * 60);
-    return true;
-  };
-  const applyAiPomodoroResult = (result: PomodoroParseResult): boolean => {
-    const liveState = liveConfigurationState.current;
-    if (liveState.mode !== "pomodoro" || liveState.status !== "idle" || liveState.cycle.phase !== "focus" || liveState.cycle.currentRound !== 1 || liveState.cycle.cycleId) return false;
+    if (result.mode === "free") {
+      if (liveState.mode !== "free") {
+        setMode("free");
+        setSettings({ ...settings, timerMode: "free" });
+        restoreCycle(null);
+        timer.reset((result.duration_minutes ?? settings.defaultDurationMinutes) * 60);
+        setTransition(null); setCompleteDialogOpen(false); setStartedAt(null); setSessionToken(null); setSavedSessionToken(null); setNotifiedToken(null);
+      } else if (result.duration_minutes !== null) {
+        timer.setDuration(result.duration_minutes * 60);
+      }
+      return true;
+    }
+
     const nextPomodoro = {
       ...settings.pomodoro,
       focusMinutes: result.focus_minutes ?? settings.pomodoro.focusMinutes,
@@ -240,9 +248,15 @@ export function FocusTimer() {
       roundsBeforeLongBreak: result.rounds ?? settings.pomodoro.roundsBeforeLongBreak,
       longBreakMinutes: result.long_break_minutes ?? settings.pomodoro.longBreakMinutes,
     };
-    if (result.task_name !== null) setTaskName(result.task_name);
-    setSettings({ ...settings, pomodoro: nextPomodoro });
-    if (result.focus_minutes !== null) timer.setDuration(result.focus_minutes * 60);
+    setSettings({ ...settings, timerMode: "pomodoro", pomodoro: nextPomodoro });
+    if (liveState.mode !== "pomodoro") {
+      setMode("pomodoro");
+      restoreCycle(null);
+      timer.reset(nextPomodoro.focusMinutes * 60);
+      setTransition(null); setCompleteDialogOpen(false); setStartedAt(null); setSessionToken(null); setSavedSessionToken(null); setNotifiedToken(null);
+    } else if (result.focus_minutes !== null) {
+      timer.setDuration(result.focus_minutes * 60);
+    }
     return true;
   };
   const canEditTask = timer.status === "idle" && (mode === "free" || (cycle.state.phase === "focus" && cycle.state.currentRound === 1 && !cycle.state.cycleId));
@@ -257,8 +271,7 @@ export function FocusTimer() {
       <TimerModeSelector mode={mode} disabled={timer.status !== "idle"} onChange={changeMode} />
       <div className="focus-heading"><p className="focus-status"><Focus size={14} />{statusText}</p><h1>{locked || timer.status === "completed" || (mode === "pomodoro" && cycle.state.cycleId) ? (taskName.trim() || "未命名专注") : "把注意力留给当下"}</h1></div>
       {canEditTask && <TaskInput taskName={taskName} category={category} disabled={false} onTaskChange={setTaskName} onCategoryChange={setCategory} />}
-      {mode === "free" && <AiFocusInput disabled={timer.status !== "idle"} onParsed={applyAiFocusResult} />}
-      {mode === "pomodoro" && <AiPomodoroInput disabled={!canConfigurePomodoro} onParsed={applyAiPomodoroResult} />}
+      <AiTimerInput disabled={!canUseAi} onParsed={applyAiTimerResult} />
       {mode === "pomodoro" && <PomodoroPhaseHeader state={cycle.state} settings={settings.pomodoro} />}
       <ProgressRing progress={progress} status={timer.status} phase={mode === "pomodoro" ? cycle.state.phase : undefined}><FlipClock seconds={timer.remainingSeconds} animate={timer.status === "running" && !settings.reduceMotion} /><p className="ring-caption">{timer.status === "paused" ? "时间已经为你停下" : mode === "pomodoro" ? `${getPomodoroPhaseLabel(cycle.state.phase)} · ${Math.round(timer.totalSeconds / 60)} 分钟` : timer.status === "running" ? "保持呼吸，继续向前" : timer.status === "completed" ? (timer.remainingSeconds === 0 ? "专注已完成并记录" : "实际专注时长已保存") : `${Math.round(timer.totalSeconds / 60)} 分钟专注`}</p></ProgressRing>
       {mode === "free" ? <TimerControls status={timer.status} onStart={begin} onPause={timer.pause} onResume={timer.resume} onEnd={requestEnd} onReset={startNewFocus} onHistory={() => router.push("/history")} /> : <PomodoroTimerControls status={timer.status} phase={cycle.state.phase} onStart={begin} onPause={timer.pause} onResume={timer.resume} onEndFocus={requestEnd} onSkipBreak={skipBreak} onResetCycle={resetPomodoroCycle} />}
