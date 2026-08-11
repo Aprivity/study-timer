@@ -1,0 +1,308 @@
+name: Deploy Aprivity Focus to VPS
+
+on:
+  workflow_run:
+    workflows:
+      - Self-hosted CI/CD
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: study-timer-vps-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DEPLOY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      DEPLOY_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+      DEPLOY_URL: https://focus.aprivity.xyz/
+      REMOTE_ROOT: /var/www/study-timer
+
+    steps:
+      - name: Checkout validated revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Build self-hosted export
+        run: NEXT_PUBLIC_AI_API_BASE_URL=/api npm run build
+
+      - name: Verify static export
+        run: |
+          set -Eeuo pipefail
+          test -f out/index.html
+          test -d out/_next
+
+      - name: Configure SSH
+        id: configure_ssh
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+
+          test -n "$SSH_HOST"
+          test "$SSH_USER" = "deploy"
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_KNOWN_HOSTS"
+
+          install -d -m 700 "$RUNNER_TEMP/study-timer-ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/study-timer-ssh/id_ed25519"
+          chmod 600 "$RUNNER_TEMP/study-timer-ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/study-timer-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/study-timer-ssh/known_hosts"
+
+      - name: Verify deploy account and target
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -Eeuo pipefail
+          ssh \
+            -i "$RUNNER_TEMP/study-timer-ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/study-timer-ssh/known_hosts" \
+            "$SSH_USER@$SSH_HOST" \
+            'set -eu; test "$(id -un)" = deploy; test -w /var/www/study-timer; test -f /var/www/study-timer/out/index.html'
+
+      - name: Create remote staging directory
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -Eeuo pipefail
+          ssh \
+            -i "$RUNNER_TEMP/study-timer-ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/study-timer-ssh/known_hosts" \
+            "$SSH_USER@$SSH_HOST" \
+            bash -s -- "$DEPLOY_ID" <<'REMOTE'
+          set -Eeuo pipefail
+          deploy_id="$1"
+          case "$deploy_id" in
+            "" | *[!0-9-]*) exit 2 ;;
+          esac
+
+          stage="/var/www/study-timer/.deploy-${deploy_id}"
+          test ! -e "$stage"
+          install -d -m 755 "$stage"
+          REMOTE
+
+      - name: Upload static export to staging
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -Eeuo pipefail
+          remote_stage="$REMOTE_ROOT/.deploy-$DEPLOY_ID"
+          rsync -az --delete \
+            --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r \
+            -e "ssh -i $RUNNER_TEMP/study-timer-ssh/id_ed25519 -o BatchMode=yes -o ConnectTimeout=10 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/study-timer-ssh/known_hosts" \
+            out/ \
+            "$SSH_USER@$SSH_HOST:$remote_stage/"
+
+      - name: Activate staged export
+        id: activate
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -Eeuo pipefail
+          ssh \
+            -i "$RUNNER_TEMP/study-timer-ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/study-timer-ssh/known_hosts" \
+            "$SSH_USER@$SSH_HOST" \
+            bash -s -- "$DEPLOY_ID" <<'REMOTE'
+          set -Eeuo pipefail
+          deploy_id="$1"
+          case "$deploy_id" in
+            "" | *[!0-9-]*) exit 2 ;;
+          esac
+
+          root="/var/www/study-timer"
+          stage="$root/.deploy-${deploy_id}"
+          current="$root/out"
+          previous="$root/out.previous"
+          marker="$root/.deploy-active-${deploy_id}"
+          current_moved=false
+
+          restore_current() {
+            status=$?
+            if [[ "$current_moved" == "true" && -d "$previous" ]]; then
+              rm -rf -- "$current"
+              mv -- "$previous" "$current"
+            fi
+            rm -f -- "$marker"
+            exit "$status"
+          }
+          trap restore_current ERR
+
+          test -f "$stage/index.html"
+          test -d "$stage/_next"
+          test -f "$current/index.html"
+
+          rm -rf -- "$previous"
+          mv -- "$current" "$previous"
+          current_moved=true
+          mv -- "$stage" "$current"
+          printf '%s\n' "$deploy_id" > "$marker"
+
+          trap - ERR
+          REMOTE
+
+      - name: Verify public site
+        id: health
+        run: |
+          set -Eeuo pipefail
+          curl -fsS \
+            --retry 5 \
+            --retry-all-errors \
+            --retry-delay 2 \
+            --connect-timeout 5 \
+            --max-time 20 \
+            -H 'Cache-Control: no-cache' \
+            "$DEPLOY_URL?deploy=$DEPLOY_SHA" \
+            >/dev/null
+
+      - name: Finalize deployment
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -Eeuo pipefail
+          ssh \
+            -i "$RUNNER_TEMP/study-timer-ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/study-timer-ssh/known_hosts" \
+            "$SSH_USER@$SSH_HOST" \
+            bash -s -- "$DEPLOY_ID" <<'REMOTE'
+          set -Eeuo pipefail
+          deploy_id="$1"
+          marker="/var/www/study-timer/.deploy-active-${deploy_id}"
+          test "$(cat "$marker")" = "$deploy_id"
+          rm -f -- "$marker"
+          REMOTE
+
+      - name: Roll back failed deployment
+        if: ${{ failure() && steps.configure_ssh.outcome == 'success' }}
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -Eeuo pipefail
+          ssh \
+            -i "$RUNNER_TEMP/study-timer-ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/study-timer-ssh/known_hosts" \
+            "$SSH_USER@$SSH_HOST" \
+            bash -s -- "$DEPLOY_ID" <<'REMOTE'
+          set -Eeuo pipefail
+          deploy_id="$1"
+          case "$deploy_id" in
+            "" | *[!0-9-]*) exit 2 ;;
+          esac
+
+          root="/var/www/study-timer"
+          current="$root/out"
+          previous="$root/out.previous"
+          marker="$root/.deploy-active-${deploy_id}"
+          failed="$root/.deploy-failed-${deploy_id}"
+
+          if [[ ! -f "$marker" ]] || [[ "$(cat "$marker")" != "$deploy_id" ]]; then
+            exit 0
+          fi
+
+          test -f "$previous/index.html"
+          test ! -e "$failed"
+          mv -- "$current" "$failed"
+          if ! mv -- "$previous" "$current"; then
+            mv -- "$failed" "$current"
+            exit 1
+          fi
+          rm -rf -- "$failed"
+          rm -f -- "$marker"
+          REMOTE
+
+          curl -fsS \
+            --retry 5 \
+            --retry-all-errors \
+            --retry-delay 2 \
+            --connect-timeout 5 \
+            --max-time 20 \
+            -H 'Cache-Control: no-cache' \
+            "$DEPLOY_URL?rollback=$DEPLOY_SHA" \
+            >/dev/null
+
+      - name: Clean up unused staging directory
+        if: ${{ always() && steps.configure_ssh.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -Eeuo pipefail
+          ssh \
+            -i "$RUNNER_TEMP/study-timer-ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/study-timer-ssh/known_hosts" \
+            "$SSH_USER@$SSH_HOST" \
+            bash -s -- "$DEPLOY_ID" <<'REMOTE'
+          set -Eeuo pipefail
+          deploy_id="$1"
+          case "$deploy_id" in
+            "" | *[!0-9-]*) exit 2 ;;
+          esac
+          rm -rf -- "/var/www/study-timer/.deploy-${deploy_id}"
+          REMOTE
