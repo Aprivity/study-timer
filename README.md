@@ -281,6 +281,8 @@ DEPLOY_TARGET=github-pages npm run build
 
 ## 自动部署
 
+### GitHub Pages
+
 `.github/workflows/deploy-pages.yml` 使用 GitHub Pages 官方 Actions：
 
 1. 推送到 `main` 或手动触发 `workflow_dispatch`。
@@ -290,7 +292,33 @@ DEPLOY_TARGET=github-pages npm run build
 5. 将生成的 `out/` 上传为 Pages artifact。
 6. 通过 `github-pages` environment 部署到 GitHub Pages。
 
-部署采用并发控制，避免多个生产部署相互覆盖。工作流在 Draft PR 阶段不会部署；合并到 `main` 后才会自动执行。
+Pages 部署采用独立并发控制，避免多个生产部署相互覆盖。
+
+### 自有 VPS
+
+`.github/workflows/ci-cd-self-hosted.yml` 保留自托管版本的 CI 检查；PR、`main`
+更新或手动触发时会执行依赖安装、测试、ESLint、根路径静态构建和 `out/`
+校验。既有检查名称保持不变，供分支保护规则继续使用。
+
+独立的 `.github/workflows/deploy-vps.yml` 负责生产部署：
+
+1. `main` 的 `Self-hosted CI/CD` 成功完成后自动触发，也支持
+   `workflow_dispatch` 手动部署所选分支。
+2. 检出刚通过 CI 的准确提交，并在 Actions 中重新运行 `npm ci`、测试、
+   ESLint，以及 `NEXT_PUBLIC_AI_API_BASE_URL=/api npm run build`。
+3. 使用 Repository Secrets `SSH_HOST`、`SSH_USER`、`SSH_PRIVATE_KEY` 和
+   `SSH_KNOWN_HOSTS` 连接 VPS；部署账号必须为无 root 的 `deploy`。
+4. 将 Actions 生成的 `out/` 用 rsync 上传到
+   `/var/www/study-timer/.deploy-<run-id>/`。VPS 不执行 `git pull`、`npm ci`
+   或 `npm build`，也不修改 Nginx。
+5. 校验临时目录后，在同一文件系统内将当前 `out/` 移为
+   `/var/www/study-timer/out.previous`，再将临时目录重命名为新的 `out/`。
+6. 请求 [https://focus.aprivity.xyz/](https://focus.aprivity.xyz/) 验证线上服务。
+   检查失败时恢复 `out.previous`，并让 workflow 保持失败状态；成功时保留
+   `out.previous` 作为上一版。
+
+VPS 部署使用固定 concurrency group，同一时间只允许一个生产部署执行。
+Secret 只写入 runner 的临时 SSH 文件，不输出到日志或传入前端构建产物。
 
 ## 项目结构
 
