@@ -1,15 +1,24 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlanImageGenerator, PlanImageResult } from "@/lib/plan-image";
 import { PlanImageStudio } from "./PlanImageStudio";
 
+const imageBlob = new Blob(["png"], { type: "image/png" });
 const result = {
-  src: "/mock-plan-image.svg",
+  src: "blob:plan-image",
+  blob: imageBlob,
   alt: "测试计划图",
-  downloadName: "test-plan.svg",
+  downloadName: "test-plan.png",
 };
 
 describe("PlanImageStudio", () => {
+  const revokeObjectURL = vi.fn();
+
+  beforeEach(() => {
+    revokeObjectURL.mockClear();
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL });
+  });
+
   it("moves from empty to ready when the user enters a plan", () => {
     render(<PlanImageStudio />);
 
@@ -42,8 +51,8 @@ describe("PlanImageStudio", () => {
     const preview = await screen.findByRole("img", { name: "测试计划图" });
     const download = screen.getByRole("link", { name: "下载图片" });
     expect(preview).toBeInTheDocument();
-    expect(download).toHaveAttribute("href", "/mock-plan-image.svg");
-    expect(download).toHaveAttribute("download", "test-plan.svg");
+    expect(download).toHaveAttribute("href", "blob:plan-image");
+    expect(download).toHaveAttribute("download", "test-plan.png");
     expect(screen.getByRole("button", { name: "重新生成" })).toBeEnabled();
   });
 
@@ -62,5 +71,41 @@ describe("PlanImageStudio", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "重新生成" }));
     await waitFor(() => expect(generator.generate).toHaveBeenCalledTimes(2));
+  });
+
+  it("releases the previous Object URL when regenerating and the current URL on unmount", async () => {
+    const secondResult: PlanImageResult = { ...result, src: "blob:second-plan-image" };
+    const generator: PlanImageGenerator = {
+      generate: vi.fn()
+        .mockResolvedValueOnce(result)
+        .mockResolvedValueOnce(secondResult),
+    };
+    const { unmount } = render(<PlanImageStudio generator={generator} />);
+
+    fireEvent.change(screen.getByLabelText("你的计划"), { target: { value: "明天学习高数" } });
+    fireEvent.click(screen.getByRole("button", { name: "生成计划图" }));
+    await screen.findByRole("img", { name: "测试计划图" });
+
+    fireEvent.click(screen.getByRole("button", { name: "重新生成" }));
+    await waitFor(() => expect(screen.getByRole("link", { name: "下载图片" })).toHaveAttribute("href", "blob:second-plan-image"));
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:plan-image");
+
+    unmount();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:second-plan-image");
+  });
+
+  it("releases a generated Object URL that resolves after unmount", async () => {
+    let resolveGeneration!: (value: PlanImageResult) => void;
+    const generator: PlanImageGenerator = {
+      generate: vi.fn(() => new Promise<PlanImageResult>((resolve) => { resolveGeneration = resolve; })),
+    };
+    const { unmount } = render(<PlanImageStudio generator={generator} />);
+
+    fireEvent.change(screen.getByLabelText("你的计划"), { target: { value: "晚上复习英语" } });
+    fireEvent.click(screen.getByRole("button", { name: "生成计划图" }));
+    unmount();
+    resolveGeneration(result);
+
+    await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith("blob:plan-image"));
   });
 });

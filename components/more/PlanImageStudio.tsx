@@ -1,10 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Download, ImageIcon, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
 import {
-  mockPlanImageGenerator,
+  planImageGenerator,
   type PlanImageGenerator,
   type PlanImageResult,
 } from "@/lib/plan-image";
@@ -17,14 +17,28 @@ type GenerationState =
 
 const INPUT_EXAMPLE = "明天上午学习两小时高数，下午背一小时四级单词，晚上看45分钟美股视频。";
 
-export function PlanImageStudio({ generator = mockPlanImageGenerator }: { generator?: PlanImageGenerator }) {
+export function PlanImageStudio({ generator = planImageGenerator }: { generator?: PlanImageGenerator }) {
   const [plan, setPlan] = useState("");
   const [generation, setGeneration] = useState<GenerationState>({ status: "idle" });
+  const objectUrlRef = useRef<string | null>(null);
+  const requestIdRef = useRef(0);
   const canGenerate = plan.trim().length > 0 && generation.status !== "loading";
+
+  const releaseObjectUrl = useCallback(() => {
+    if (!objectUrlRef.current) return;
+    URL.revokeObjectURL(objectUrlRef.current);
+    objectUrlRef.current = null;
+  }, []);
+
+  useEffect(() => () => {
+    requestIdRef.current += 1;
+    releaseObjectUrl();
+  }, [releaseObjectUrl]);
 
   const updatePlan = (value: string) => {
     setPlan(value);
     if (generation.status !== "loading") {
+      releaseObjectUrl();
       setGeneration({ status: "idle" });
     }
   };
@@ -33,12 +47,22 @@ export function PlanImageStudio({ generator = mockPlanImageGenerator }: { genera
     event.preventDefault();
     if (!canGenerate) return;
 
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    releaseObjectUrl();
     setGeneration({ status: "loading" });
     try {
       const result = await generator.generate(plan.trim());
+      if (requestId !== requestIdRef.current) {
+        URL.revokeObjectURL(result.src);
+        return;
+      }
+      objectUrlRef.current = result.src;
       setGeneration({ status: "success", result });
     } catch {
-      setGeneration({ status: "error" });
+      if (requestId === requestIdRef.current) {
+        setGeneration({ status: "error" });
+      }
     }
   };
 
@@ -51,7 +75,7 @@ export function PlanImageStudio({ generator = mockPlanImageGenerator }: { genera
         <textarea
           id="plan-image-input"
           value={plan}
-          maxLength={1200}
+          maxLength={2000}
           rows={7}
           disabled={generation.status === "loading"}
           onChange={(event) => updatePlan(event.target.value)}
@@ -100,12 +124,11 @@ export function PlanImageStudio({ generator = mockPlanImageGenerator }: { genera
               <Image
                 src={generation.result.src}
                 alt={generation.result.alt}
-                width={1200}
-                height={1500}
+                width={1024}
+                height={1024}
                 priority={false}
               />
             </div>
-            <p className="mock-result-note">当前为本地 Mock 结果，用于验证页面与下载流程。</p>
             <a className="secondary-button plan-download-button" href={generation.result.src} download={generation.result.downloadName}>
               <Download size={17} aria-hidden="true" />下载图片
             </a>
