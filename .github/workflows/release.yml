@@ -74,19 +74,54 @@ jobs:
 
           TAG="v${VERSION}"
 
-          git fetch origin main --no-tags
-          REMOTE_MAIN_SHA="$(git rev-parse origin/main)"
+          REMOTE_MAIN_SHA="$(
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" \
+              --jq '.object.sha'
+          )"
           if [[ "$GITHUB_SHA" != "$REMOTE_MAIN_SHA" ]]; then
             echo "ERROR: main moved after this workflow started; run the release workflow again" >&2
             exit 1
           fi
 
-          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
-            echo "ERROR: tag ${TAG} already exists" >&2
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "ERROR: GitHub Release ${TAG} already exists" >&2
             exit 1
           fi
 
+          TAG_EXISTS=false
+          if TAG_REF_TYPE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq '.object.type' 2>/dev/null)"; then
+            TAG_REF_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq '.object.sha')"
+
+            case "$TAG_REF_TYPE" in
+              commit)
+                TAG_COMMIT_SHA="$TAG_REF_SHA"
+                ;;
+              tag)
+                TAG_TARGET_TYPE="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${TAG_REF_SHA}" --jq '.object.type')"
+                if [[ "$TAG_TARGET_TYPE" != "commit" ]]; then
+                  echo "ERROR: tag ${TAG} does not ultimately reference a commit" >&2
+                  exit 1
+                fi
+                TAG_COMMIT_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${TAG_REF_SHA}" --jq '.object.sha')"
+                ;;
+              *)
+                echo "ERROR: unsupported tag object type ${TAG_REF_TYPE} for ${TAG}" >&2
+                exit 1
+                ;;
+            esac
+
+            if [[ "$TAG_COMMIT_SHA" != "$GITHUB_SHA" ]]; then
+              echo "ERROR: tag ${TAG} already exists but points to ${TAG_COMMIT_SHA}, not ${GITHUB_SHA}" >&2
+              exit 1
+            fi
+
+            TAG_EXISTS=true
+            echo "Reusing existing tag ${TAG} because it points to the current main commit."
+          fi
+
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "tag_exists=${TAG_EXISTS}" >> "$GITHUB_OUTPUT"
 
       - name: Package self-hosted export
         id: package
@@ -100,6 +135,8 @@ jobs:
           echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
 
       - name: Create annotated release tag
+        id: create_tag
+        if: steps.release_meta.outputs.tag_exists == 'false'
         env:
           TAG: ${{ steps.release_meta.outputs.tag }}
           GH_TOKEN: ${{ github.token }}
@@ -124,20 +161,25 @@ jobs:
             -f sha="$TAG_OBJECT_SHA" \
             >/dev/null
 
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
       - name: Publish GitHub Release
         env:
           TAG: ${{ steps.release_meta.outputs.tag }}
           ARCHIVE: ${{ steps.package.outputs.archive }}
           PRERELEASE: ${{ inputs.prerelease }}
+          TAG_CREATED: ${{ steps.create_tag.outputs.created }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
 
           cleanup_tag() {
-            gh api \
-              --method DELETE \
-              "repos/${GITHUB_REPOSITORY}/git/refs/tags/${TAG}" \
-              >/dev/null 2>&1 || true
+            if [[ "${TAG_CREATED:-}" == "true" ]]; then
+              gh api \
+                --method DELETE \
+                "repos/${GITHUB_REPOSITORY}/git/refs/tags/${TAG}" \
+                >/dev/null 2>&1 || true
+            fi
           }
           trap cleanup_tag ERR
 
