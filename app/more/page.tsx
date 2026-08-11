@@ -8,7 +8,7 @@ export default function MorePage() {
       <Link href="/" className="back-link"><ArrowLeft size={17} />返回计时器</Link>
       <div className="page-heading">
         <p className="eyebrow">Extend your focus</p>
-        <h1 className="page-title">更多</h1>
+        <h1 className="page-title more-page-title">更多</h1>
         <p className="page-copy">在保持专注界面安静的同时，把需要时才使用的能力放在这里。</p>
       </div>
 

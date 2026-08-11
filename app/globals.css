@@ -312,6 +312,13 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 
 /* Extension pages stay narrow and list-like so the timer remains the visual center of the product. */
 .more-page, .plan-image-page { width: min(720px, calc(100% - 40px)); }
+.more-page-title {
+  font-family: "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: clamp(1.9rem, 4.5vw, 3.05rem);
+  font-weight: 550;
+  letter-spacing: -.04em;
+  line-height: 1.05;
+}
 .feature-list { border-top: 1px solid var(--divider); }
 .feature-row { min-height: 112px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 17px; border-bottom: 1px solid var(--divider); transition: color .18s, background .18s; }
 .feature-row:not(.feature-row-disabled):hover { color: var(--sage-light); background: rgba(143,170,150,.035); }
