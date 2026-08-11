@@ -38,14 +38,14 @@ describe("focus API client", () => {
 
   it("distinguishes backend and network failures", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(responseWith({}, { ok: false, status: 503 }));
-    await expect(parseFocusText("学习")).rejects.toMatchObject<Partial<FocusApiError>>({ kind: "backend", status: 503 });
+    await expect(parseFocusText("学习")).rejects.toMatchObject({ kind: "backend", status: 503 } satisfies Partial<FocusApiError>);
 
     vi.mocked(fetch).mockRejectedValueOnce(new TypeError("offline"));
-    await expect(parseFocusText("学习")).rejects.toMatchObject<Partial<FocusApiError>>({ kind: "network" });
+    await expect(parseFocusText("学习")).rejects.toMatchObject({ kind: "network" } satisfies Partial<FocusApiError>);
   });
 
   it("rejects malformed focus results before they reach the timer", async () => {
     vi.mocked(fetch).mockResolvedValue(responseWith({ task_name: "学习", duration_minutes: 721 }));
-    await expect(parseFocusText("学习很久")).rejects.toMatchObject<Partial<FocusApiError>>({ kind: "invalid-response" });
+    await expect(parseFocusText("学习很久")).rejects.toMatchObject({ kind: "invalid-response" } satisfies Partial<FocusApiError>);
   });
 });
