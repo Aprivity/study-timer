@@ -349,7 +349,7 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 .plan-result-success { width: 100%; padding: 18px; }
 .plan-image-preview { overflow: hidden; border-radius: 14px; background: #edf0e8; }
 .plan-image-preview img { display: block; width: 100%; height: auto; }
-.mock-result-note { margin: 12px 2px 15px; color: var(--text-muted); font-size: .7rem; line-height: 1.5; }
+.plan-download-button { margin-top: 15px; }
 
 [data-color-mode="light"] .plan-result { background: rgba(255,253,248,.54); }
 
