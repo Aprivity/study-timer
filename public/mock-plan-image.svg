@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1500" viewBox="0 0 1200 1500" role="img" aria-labelledby="title desc">
+  <title id="title">Aprivity Focus 计划图 Mock 预览</title>
+  <desc id="desc">展示上午、下午和晚上的三段示例学习安排。</desc>
+  <rect width="1200" height="1500" rx="48" fill="#edf0e8"/>
+  <circle cx="1030" cy="140" r="210" fill="#dce5da"/>
+  <circle cx="108" cy="1390" r="260" fill="#e5dfcf"/>
+  <g font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+    <text x="100" y="120" fill="#627565" font-size="24" font-weight="700" letter-spacing="4">APRIVITY FOCUS · PLAN PREVIEW</text>
+    <text x="100" y="218" fill="#1f2b22" font-size="70" font-weight="750">明日执行计划</text>
+    <text x="100" y="278" fill="#6f7b71" font-size="28">把重要的事，放进清晰的时间里。</text>
+
+    <line x1="128" y1="414" x2="128" y2="1190" stroke="#9eb09f" stroke-width="5" stroke-linecap="round"/>
+
+    <circle cx="128" cy="464" r="20" fill="#617c68"/>
+    <text x="190" y="438" fill="#627565" font-size="24" font-weight="700" letter-spacing="2">上午 · 09:00—11:00</text>
+    <text x="190" y="505" fill="#1f2b22" font-size="45" font-weight="720">高等数学</text>
+    <text x="190" y="557" fill="#6f7b71" font-size="27">两小时 · 概念梳理与习题练习</text>
+
+    <circle cx="128" cy="734" r="20" fill="#8b9d77"/>
+    <text x="190" y="708" fill="#627565" font-size="24" font-weight="700" letter-spacing="2">下午 · 15:00—16:00</text>
+    <text x="190" y="775" fill="#1f2b22" font-size="45" font-weight="720">四级单词</text>
+    <text x="190" y="827" fill="#6f7b71" font-size="27">一小时 · 新词记忆与复习</text>
+
+    <circle cx="128" cy="1004" r="20" fill="#ad8c68"/>
+    <text x="190" y="978" fill="#627565" font-size="24" font-weight="700" letter-spacing="2">晚上 · 20:00—20:45</text>
+    <text x="190" y="1045" fill="#1f2b22" font-size="45" font-weight="720">美股视频</text>
+    <text x="190" y="1097" fill="#6f7b71" font-size="27">45 分钟 · 观看并记录核心观点</text>
+
+    <rect x="100" y="1260" width="1000" height="132" rx="28" fill="#233128"/>
+    <text x="148" y="1320" fill="#b9cbbb" font-size="22" font-weight="700" letter-spacing="2">执行提醒</text>
+    <text x="148" y="1362" fill="#edf2ed" font-size="27">一次只做一件事，完成后再进入下一段。</text>
+  </g>
+</svg>

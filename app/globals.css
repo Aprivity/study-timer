@@ -310,6 +310,54 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 .privacy-note { display: flex; gap: 14px; margin-top: 32px; padding: 20px; border: 1px solid var(--divider); border-radius: 14px; color: var(--sage-muted); background: rgba(143,170,150,.035); }
 .privacy-note svg { flex: 0 0 auto; width: 20px; }
 
+/* Extension pages stay narrow and list-like so the timer remains the visual center of the product. */
+.more-page, .plan-image-page { width: min(720px, calc(100% - 40px)); }
+.feature-list { border-top: 1px solid var(--divider); }
+.feature-row { min-height: 112px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 17px; border-bottom: 1px solid var(--divider); transition: color .18s, background .18s; }
+.feature-row:not(.feature-row-disabled):hover { color: var(--sage-light); background: rgba(143,170,150,.035); }
+.feature-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 13px; color: var(--sage-primary); background: rgba(143,170,150,.07); }
+.feature-icon svg { width: 19px; }
+.feature-copy strong, .feature-copy small { display: block; }
+.feature-copy strong { margin-bottom: 7px; color: var(--text-primary); font-size: .98rem; font-weight: 610; }
+.feature-copy small { color: var(--text-muted); font-size: .78rem; line-height: 1.55; }
+.feature-arrow { width: 18px; color: var(--text-muted); transition: transform .18s, color .18s; }
+.feature-row:hover .feature-arrow { color: var(--sage-light); transform: translate(2px, -2px); }
+.feature-row-disabled { opacity: .66; }
+.feature-status { min-height: 26px; display: inline-flex; align-items: center; padding: 0 10px; border: 1px solid var(--divider); border-radius: 999px; color: var(--text-muted); font-size: .68rem; white-space: nowrap; }
+
+.plan-image-studio { display: grid; gap: 34px; }
+.plan-image-form { display: grid; }
+.plan-image-form label { margin-bottom: 10px; color: var(--text-secondary); font-size: .82rem; font-weight: 620; }
+.plan-image-form textarea { width: 100%; resize: vertical; min-height: 172px; border: 1px solid var(--divider); border-radius: 16px; padding: 17px 18px; color: var(--text-primary); background: var(--control-surface); box-shadow: 0 14px 40px var(--control-shadow); font: inherit; line-height: 1.65; transition: border-color .18s, background .18s; }
+.plan-image-form textarea::placeholder { color: var(--text-muted); }
+.plan-image-form textarea:focus { border-color: var(--sage-muted); outline: 2px solid rgba(143,170,150,.16); outline-offset: 2px; }
+.plan-input-hint { margin: 9px 2px 18px; color: var(--text-muted); font-size: .72rem; line-height: 1.5; }
+.plan-generate-button, .plan-download-button { width: 100%; }
+.plan-result { min-height: 330px; display: grid; place-items: center; overflow: hidden; border: 1px solid var(--divider); border-radius: 20px; background: rgba(21,31,25,.48); }
+.plan-result-message { display: grid; justify-items: center; max-width: 380px; padding: 38px 24px; color: var(--text-muted); text-align: center; }
+.plan-result-message > svg { width: 30px; height: 30px; margin-bottom: 14px; color: var(--sage-muted); }
+.plan-result-message strong { color: var(--text-secondary); font-size: .96rem; font-weight: 600; }
+.plan-result-message p { margin: 9px 0 0; font-size: .76rem; line-height: 1.55; }
+.plan-result-error > svg, .plan-result-error strong { color: var(--danger); }
+.plan-result-success { width: 100%; padding: 18px; }
+.plan-image-preview { overflow: hidden; border-radius: 14px; background: #edf0e8; }
+.plan-image-preview img { display: block; width: 100%; height: auto; }
+.mock-result-note { margin: 12px 2px 15px; color: var(--text-muted); font-size: .7rem; line-height: 1.5; }
+
+[data-color-mode="light"] .plan-result { background: rgba(255,253,248,.54); }
+
+@media (max-width: 600px) {
+  .more-page, .plan-image-page { width: min(100% - 24px, 720px); }
+  .feature-row { min-height: 106px; gap: 13px; }
+  .feature-icon { width: 40px; height: 40px; }
+  .feature-status { grid-column: 2; justify-self: start; margin-top: -5px; }
+  .feature-row-disabled { grid-template-columns: auto 1fr; padding: 14px 0; }
+  .plan-image-studio { gap: 27px; }
+  .plan-image-form textarea { min-height: 190px; padding: 15px; }
+  .plan-result { min-height: 280px; }
+  .plan-result-success { padding: 12px; }
+}
+
 @media (max-width: 600px) {
   .back-link { margin-bottom: 28px; }
   .page-heading { margin-bottom: 30px; }
