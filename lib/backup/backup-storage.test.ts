@@ -166,7 +166,7 @@ describe("backup import storage transaction", () => {
   it("rolls back earlier writes when a later write fails", () => {
     const original = Storage.prototype.setItem;
     let failed = false;
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (key: string, value: string) {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key: string, value: string) {
       if (key === STORAGE_KEYS.settings && !failed) {
         failed = true;
         throw new Error("quota");

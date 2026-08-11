@@ -55,17 +55,17 @@ describe("Pomodoro API client", () => {
     await expect(parsePomodoroText("美股视频45分钟，两轮")).resolves.toMatchObject({ rounds: 2, short_break_minutes: null });
 
     vi.mocked(fetch).mockResolvedValueOnce(responseWith({ ...completeResult, rounds: 1 }));
-    await expect(parsePomodoroText("一轮")).rejects.toMatchObject<Partial<PomodoroApiError>>({ kind: "invalid-response" });
+    await expect(parsePomodoroText("一轮")).rejects.toMatchObject({ kind: "invalid-response" } satisfies Partial<PomodoroApiError>);
 
     vi.mocked(fetch).mockResolvedValueOnce(responseWith({ task_name: "物理笔记" }));
-    await expect(parsePomodoroText("物理笔记")).rejects.toMatchObject<Partial<PomodoroApiError>>({ kind: "invalid-response" });
+    await expect(parsePomodoroText("物理笔记")).rejects.toMatchObject({ kind: "invalid-response" } satisfies Partial<PomodoroApiError>);
   });
 
   it("distinguishes backend and network failures", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(responseWith({}, { ok: false, status: 503 }));
-    await expect(parsePomodoroText("4轮")).rejects.toMatchObject<Partial<PomodoroApiError>>({ kind: "backend", status: 503 });
+    await expect(parsePomodoroText("4轮")).rejects.toMatchObject({ kind: "backend", status: 503 } satisfies Partial<PomodoroApiError>);
 
     vi.mocked(fetch).mockRejectedValueOnce(new TypeError("offline"));
-    await expect(parsePomodoroText("4轮")).rejects.toMatchObject<Partial<PomodoroApiError>>({ kind: "network" });
+    await expect(parsePomodoroText("4轮")).rejects.toMatchObject({ kind: "network" } satisfies Partial<PomodoroApiError>);
   });
 });
