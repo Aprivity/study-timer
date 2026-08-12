@@ -243,8 +243,8 @@ export function HistoryAnalysisPanel({ analyzer = analyzeHistory }: { analyzer?:
               <h3>主要规律</h3>
               <ul>{state.analysis.patterns.map((pattern) => <li key={pattern}>{pattern}</li>)}</ul>
             </div>
-            <div>
-              <h3><Lightbulb aria-hidden="true" />下一步</h3>
+            <div className="analysis-actions">
+              <h3><Lightbulb aria-hidden="true" />下一步建议</h3>
               <ol>{state.analysis.suggestions.map((suggestion) => <li key={suggestion}>{suggestion}</li>)}</ol>
             </div>
           </div>

@@ -61,7 +61,7 @@ const response: HistoryAnalyzeResponse = {
   analysis: {
     summary: "最近 7 天的专注投入有所增加。",
     patterns: ["高数投入比前一周期更集中。"],
-    suggestions: ["继续保持清晰的单次专注目标。"],
+    suggestions: ["保持当前单次专注节奏，下一阶段继续采用相近的单次时长。"],
   },
 };
 
@@ -102,7 +102,10 @@ describe("HistoryAnalysisPanel", () => {
     const card = await screen.findByRole("article", { name: "简短趋势" });
     expect(within(card).getByText(response.analysis?.summary ?? "")).toBeInTheDocument();
     expect(within(card).getByText(response.analysis?.patterns[0] ?? "")).toBeInTheDocument();
+    expect(within(card).getByRole("heading", { name: "下一步建议" })).toBeInTheDocument();
     expect(within(card).getByText(response.analysis?.suggestions[0] ?? "")).toBeInTheDocument();
+    expect(within(card).getByRole("heading", { name: "下一步建议" }).parentElement)
+      .toHaveClass("analysis-actions");
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 

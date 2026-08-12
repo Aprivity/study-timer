@@ -402,6 +402,9 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 .ai-analysis-content h3 { display: flex; align-items: center; gap: 7px; margin: 0 0 11px; color: var(--text-primary); font-size: .78rem; font-weight: 620; }
 .ai-analysis-content h3 svg { width: 15px; color: var(--sage-primary); }
 .ai-analysis-content ul, .ai-analysis-content ol { display: grid; gap: 8px; margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: .76rem; line-height: 1.6; }
+.ai-analysis-content > div + .analysis-actions { border-top: 0; padding-top: 15px; }
+.analysis-actions { border: 1px solid var(--divider); border-radius: 14px; padding: 15px 16px; background: rgba(143,170,150,.055); }
+.analysis-actions li::marker { color: var(--sage-primary); font-weight: 650; }
 .analysis-privacy-note { margin: -12px 0 0; color: var(--text-muted); font-size: .68rem; text-align: center; }
 
 @media (max-width: 600px) {
