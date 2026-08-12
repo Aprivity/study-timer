@@ -2,7 +2,7 @@
 
 Aprivity Focus 是一个面向学生和个人学习场景的沉浸式倒计时网页。它采用安静克制的 Forest Sage 视觉语言，围绕“填写任务 → 选择时长 → 专注 → 保存记录 → 查看统计”的单一流程设计。
 
-> 核心计时、历史、统计和设置完全运行在浏览器中，不需要账号或数据库。可选的 AI 设置输入依赖独立 AI Backend。
+> 核心计时、历史、统计和设置完全运行在浏览器中，不需要账号或数据库。AI 自然语言设置与 AI 计划图是可选能力，依赖独立 AI Backend。
 
 ## 在线访问
 
@@ -24,6 +24,7 @@ GitHub Pages 地址：[https://aprivity.github.io/study-timer/](https://aprivity
 - 原生 CSS 3D 翻页时钟，支持 `MM:SS` 和 `HH:MM:SS`
 - 25、45、60、80 分钟预设与 1–720 分钟自定义时长
 - 首页统一 AI 自然语言输入，自动识别自由专注或番茄循环并填写现有设置
+- “更多”扩展能力入口，以及自然语言驱动的 AI 计划图生成、预览、重新生成与 PNG 下载
 - 任务名称和数学、英语、项目、阅读、其他分类
 - localStorage 学习记录，完成记录 UUID 防重复写入
 - 今日专注时长、完成次数和连续专注天数统计
@@ -50,8 +51,7 @@ GitHub Pages 地址：[https://aprivity.github.io/study-timer/](https://aprivity
 
 ## AI 自然语言设置
 
-首页任务区下方只有一个 AI 输入框，不需要用户预先选择计时模式。前端将整句
-描述发送给 AI Backend 的统一接口：
+首页任务区下方只有一个 AI 输入框，不需要用户预先选择计时模式。前端将整句描述发送给 AI Backend 的统一接口：
 
 ```http
 POST /api/v1/timer/parse
@@ -88,16 +88,9 @@ Content-Type: application/json
 }
 ```
 
-`mode=free` 时页面自动切换到自由专注并填写任务和一次性时长；
-`mode=pomodoro` 时自动切换到番茄循环并写入现有任务、每轮专注、短休息、
-轮数和长休息设置。所有 `null` 字段均保持当前模式对应的已有值，不清空也
-不猜测。37 分钟等非预设自由时长会同步显示为“自定义”；番茄参数仍可在
-现有设置页继续手动修改。
+`mode=free` 时页面自动切换到自由专注并填写任务和一次性时长；`mode=pomodoro` 时自动切换到番茄循环并写入现有任务、每轮专注、短休息、轮数和长休息设置。所有 `null` 字段均保持当前模式对应的已有值，不清空也不猜测。37 分钟等非预设自由时长会同步显示为“自定义”；番茄参数仍可在现有设置页继续手动修改。
 
-AI 结果只在计时器仍为 `idle` 且没有已经开始的番茄循环时应用。解析期间
-如果用户点击开始，迟到的结果会被拒绝。AI 处理逻辑不调用 start、pause、
-resume 或 stop；只有用户点击“开始专注”才会启动计时。运行中、暂停中以及
-已进入循环后的阶段间空闲状态均禁止 AI 改写配置。
+AI 结果只在计时器仍为 `idle` 且没有已经开始的番茄循环时应用。解析期间如果用户点击开始，迟到的结果会被拒绝。AI 处理逻辑不调用 start、pause、resume 或 stop；只有用户点击“开始专注”才会启动计时。运行中、暂停中以及已进入循环后的阶段间空闲状态均禁止 AI 改写配置。
 
 前端不包含 OpenASI API Key，也没有新增 Next.js API Route、Server Action 或其他服务端代码。默认请求同源 `/api`，适合由 Nginx 将 `/api/` 反向代理到 AI Backend。也可以在构建时配置公开的后端基础地址：
 
@@ -105,10 +98,24 @@ resume 或 stop；只有用户点击“开始专注”才会启动计时。运�
 NEXT_PUBLIC_AI_API_BASE_URL=https://ai.example.com/api npm run build
 ```
 
-该变量只填写 API 基础路径，不包含 `/v1/timer/parse`。若前后端跨域，AI Backend 还需要允许网页域名的
-CORS 请求。OpenASI API Key 只配置在 AI Backend 服务器。GitHub Pages
-部署可通过仓库变量 `NEXT_PUBLIC_AI_API_BASE_URL` 指定可公开访问的后端；
-未配置时仍使用默认同源 `/api`。
+该变量只填写 API 基础路径，不包含 `/v1/timer/parse`。若前后端跨域，AI Backend 还需要允许网页域名的 CORS 请求。OpenASI API Key 只配置在 AI Backend 服务器。GitHub Pages 部署可通过仓库变量 `NEXT_PUBLIC_AI_API_BASE_URL` 指定可公开访问的后端；未配置时仍使用默认同源 `/api`。
+
+## AI 计划图
+
+AI 计划图位于 `更多 → AI 计划图`。用户可以直接用自然语言写下学习或工作计划，前端调用：
+
+```http
+POST /api/v1/plan-image/generate
+Content-Type: application/json
+
+{"text":"明天上午学习两小时高数，下午背一小时四级单词。"}
+```
+
+成功响应为 `image/png`。前端将 PNG 作为 Blob 预览，并提供重新生成和下载，不把生成图片写入专注历史。
+
+当前后端采用“事实锁定 + 创意自由”的计划图生成方式：学习任务名称和时长保持来自用户计划；只有用户明确给出的具体钟点才允许作为固定安排展示，不会为没有具体时间的学习任务自动推断开始或结束时间。在这些事实边界内，图片可以自由使用彩色模块、学习海报、信息图、插画、重点模块和“建议执行顺序”等视觉表达，建议顺序也只能重排已有事项，不能新增无关学习任务。
+
+计划图 V1 不提供模板编辑器、历史图库或云端图片存储。页面刷新后当前 Blob 预览会消失，需要重新生成；图片模型仍可能出现字体、排版或视觉细节波动，适合将“重新生成”作为正常工作流的一部分。
 
 ## 背景系统
 
@@ -173,7 +180,7 @@ CORS 请求。OpenASI API Key 只配置在 AI Backend 服务器。GitHub Pages
 
 开启路径：`设置 → 桌面通知 → 确认浏览器权限`。首次打开页面、开始计时和计时结束时都不会自动申请权限，只有用户主动打开开关时才会调用权限请求。权限被拒绝后，应用不会重复弹窗；需要在浏览器的网站权限设置中手动允许。
 
-通知设置与完成提示音相互独立。任务名称只用于当前浏览器生成通知正文，不会发送到服务器。应用不使用第三方推送服务、Web Push 后端、Service Worker 或服务器定时任务。
+通知设置与完成提示音相互独立。任务名称只用于当前浏览器生成通知正文，不会因为通知功能而发送到服务器。应用不使用第三方推送服务、Web Push 后端、Service Worker 或服务器定时任务。
 
 桌面通知需要 HTTPS 或浏览器认可的安全上下文，GitHub Pages 满足 HTTPS 条件。页面必须仍在浏览器中打开；关闭所有相关页面后不保证继续通知。系统勿扰模式、浏览器后台策略以及不同移动端系统可能限制通知显示，本功能不等同于服务器推送。
 
@@ -215,13 +222,36 @@ CORS 请求。OpenASI API Key 只配置在 AI Backend 服务器。GitHub Pages
 
 ### 专注计时器
 
-![Aprivity Focus 自由专注计时器](docs/screenshots/focus-timer.webp)
+![Aprivity Focus 自由专注主页](docs/screenshots/focus-home.webp)
 
-Forest Sage 沉浸式首页，包含自由专注与番茄循环切换、任务分类、SVG 圆环和机械翻页时钟。
+Forest Sage 深色首页把任务、分类、AI 填写、自由专注 / 番茄循环与翻页计时器收拢在同一条专注路径中；顶部只保留历史记录、更多、设置和全屏。
 
 ![专注时长预设与今日统计](docs/screenshots/today-summary.webp)
 
 快捷时长支持 25、45、60、80 分钟和自定义输入；首页同步展示今日专注时长、完成次数与连续专注天数。
+
+### 更多与 AI 计划图
+
+![“更多”功能中心](docs/screenshots/more-hub.webp)
+
+“更多”作为扩展能力入口，保持主计时界面克制；当前提供 AI 计划图，并为后续 AI 历史专注分析等能力预留位置。
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/plan-image-studio.webp" alt="AI 计划图输入页面" /></td>
+    <td width="50%"><img src="docs/screenshots/plan-image-generating.webp" alt="AI 计划图生成中状态" /></td>
+  </tr>
+  <tr>
+    <td align="center">用自然语言写下任务、时长和已有时间约束</td>
+    <td align="center">生成过程中保留输入，并展示明确的等待状态</td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/plan-image-result.webp" alt="AI 计划图生成结果与下载入口" width="340" />
+</p>
+
+生成结果直接在页面预览，可重新生成或下载 PNG。图片允许用建议执行顺序、重点模块和更有活力的视觉设计增强可执行感，但不会擅自修改学习内容、任务时长，也不会为用户没有给出具体钟点的学习任务自动排时间。
 
 ### 专注历史
 
@@ -296,39 +326,30 @@ Pages 部署采用独立并发控制，避免多个生产部署相互覆盖。
 
 ### 自有 VPS
 
-`.github/workflows/ci-cd-self-hosted.yml` 保留自托管版本的 CI 检查；PR、`main`
-更新或手动触发时会执行依赖安装、测试、ESLint、根路径静态构建和 `out/`
-校验。既有检查名称保持不变，供分支保护规则继续使用。
+`.github/workflows/ci-cd-self-hosted.yml` 保留自托管版本的 CI 检查；PR、`main` 更新或手动触发时会执行依赖安装、测试、ESLint、根路径静态构建和 `out/` 校验。既有检查名称保持不变，供分支保护规则继续使用。
 
 独立的 `.github/workflows/deploy-vps.yml` 负责生产部署：
 
-1. `main` 的 `Self-hosted CI/CD` 成功完成后自动触发，也支持
-   `workflow_dispatch` 手动部署所选分支。
-2. 检出刚通过 CI 的准确提交，并在 Actions 中重新运行 `npm ci`、测试、
-   ESLint，以及 `NEXT_PUBLIC_AI_API_BASE_URL=/api npm run build`。
-3. 使用 Repository Secrets `SSH_HOST`、`SSH_USER`、`SSH_PRIVATE_KEY` 和
-   `SSH_KNOWN_HOSTS` 连接 VPS；部署账号必须为无 root 的 `deploy`。
-4. 将 Actions 生成的 `out/` 用 rsync 上传到
-   `/var/www/study-timer/.deploy-<run-id>/`。VPS 不执行 `git pull`、`npm ci`
-   或 `npm build`，也不修改 Nginx。
-5. 校验临时目录后，在同一文件系统内将当前 `out/` 移为
-   `/var/www/study-timer/out.previous`，再将临时目录重命名为新的 `out/`。
-6. 请求 [https://focus.aprivity.xyz/](https://focus.aprivity.xyz/) 验证线上服务。
-   检查失败时恢复 `out.previous`，并让 workflow 保持失败状态；成功时保留
-   `out.previous` 作为上一版。
+1. `main` 的 `Self-hosted CI/CD` 成功完成后自动触发，也支持 `workflow_dispatch` 手动部署所选分支。
+2. 检出刚通过 CI 的准确提交，并在 Actions 中重新运行 `npm ci`、测试、ESLint，以及 `NEXT_PUBLIC_AI_API_BASE_URL=/api npm run build`。
+3. 使用 Repository Secrets `SSH_HOST`、`SSH_USER`、`SSH_PRIVATE_KEY` 和 `SSH_KNOWN_HOSTS` 连接 VPS；部署账号必须为无 root 的 `deploy`。
+4. 将 Actions 生成的 `out/` 用 rsync 上传到 `/var/www/study-timer/.deploy-<run-id>/`。VPS 不执行 `git pull`、`npm ci` 或 `npm build`，也不修改 Nginx。
+5. 校验临时目录后，在同一文件系统内将当前 `out/` 移为 `/var/www/study-timer/out.previous`，再将临时目录重命名为新的 `out/`。
+6. 请求 [https://focus.aprivity.xyz/](https://focus.aprivity.xyz/) 验证线上服务。检查失败时恢复 `out.previous`，并让 workflow 保持失败状态；成功时保留 `out.previous` 作为上一版。
 
-VPS 部署使用固定 concurrency group，同一时间只允许一个生产部署执行。
-Secret 只写入 runner 的临时 SSH 文件，不输出到日志或传入前端构建产物。
+VPS 部署使用固定 concurrency group，同一时间只允许一个生产部署执行。Secret 只写入 runner 的临时 SSH 文件，不输出到日志或传入前端构建产物。
 
 ## 项目结构
 
 ```text
 app/                 页面、布局和全局视觉变量
   history/           历史记录页面
+  more/              扩展功能中心与 AI 计划图页面
   settings/          设置页面
 components/
   background/        背景 Provider、渲染层、预设和自定义编辑器
   focus/             计时器、圆环、翻页时钟、任务和控制
+  more/              AI 计划图输入、生成状态、预览与下载 UI
   pomodoro/          模式选择、阶段信息、轮次进度、控制和过渡弹窗
   history/
     HistoryDashboard.tsx  历史页统一状态和数据流
@@ -351,9 +372,10 @@ lib/
   backup/                    备份结构、导出、验证、合并、事务写入与恢复
   local-date.ts              统一本地日期和周边界工具
   history-analytics.ts       热力等级、每日聚合和概览纯函数
-  notifications.ts            通知策略、消息、图标路径和安全发送
-  pomodoro.ts                 番茄状态机纯函数
-  storage.ts                  localStorage 校验与兼容迁移
+  notifications.ts          通知策略、消息、图标路径和安全发送
+  plan-image.ts              AI 计划图客户端、Blob 与下载处理
+  pomodoro.ts                番茄状态机纯函数
+  storage.ts                 localStorage 校验与兼容迁移
 types/
   backup.ts                  备份、预览、导入和恢复点类型
   history-analytics.ts       热力图每日摘要和概览类型
@@ -422,7 +444,9 @@ JSON 可能包含任务名称和完整学习历史，请像保管个人文档一
 
 ## 隐私
 
-V1 不发送、上传或同步任务和学习记录。热力图完全由浏览器本地历史记录生成，不使用第三方分析服务。桌面通知正文也只在本地生成，不会上传任务名称或交给第三方推送服务。项目不包含密钥、追踪脚本、用户账户或远程数据库。
+核心计时、专注历史、热力图、设置和备份都保存在当前浏览器中，不使用第三方分析服务，也不会自动上传。只有用户主动点击 AI 填写或生成 AI 计划图时，对应的自然语言输入才会发送到配置的 AI Backend；AI 计划图生成结果以 PNG Blob 返回浏览器用于预览和下载，V1 不提供前端图片历史或云端图库。
+
+桌面通知正文只在本地生成，不会因为通知功能上传任务名称或交给第三方推送服务。前端不包含 AI Provider API Key；密钥只应配置在 AI Backend 服务器。
 
 localStorage 数据按浏览器配置和站点来源（协议、域名及端口）隔离。因此 GitHub Pages、localhost、其他浏览器或无痕窗口之间不会共享专注状态、历史记录、热力图或背景设置。清理浏览器站点数据后，历史记录及由它生成的热力图可能永久丢失。
 
@@ -450,12 +474,15 @@ localStorage 数据按浏览器配置和站点来源（协议、域名及端口�
 
 热力图测试覆盖本地日期键、月末/年末换日、周一边界、完整周日期范围、UTC 偏移防回归、固定五级阈值、空日期补齐、自由/番茄/提前结束聚合、休息排除、分类筛选、跨月跨年最长连续、默认日期选择、日期详情、删除同步、清空空状态、ARIA 标签和移动端滚动容器。
 
+AI 测试覆盖统一自然语言计时输入、自由专注/番茄配置应用时机、计划图请求、PNG Blob、Object URL 生命周期、生成中状态、错误处理、重新生成和下载流程。
+
 ## 当前限制
 
 - 数据仅存在当前浏览器中，清理站点数据后无法恢复，也不会跨设备同步。
 - JSON v1 不包含自定义背景图片；跨浏览器迁移时图片背景需要重新上传。当前仅保留最近一次导入恢复点。
 - 全屏和提示音受浏览器权限及自动播放策略约束；失败时计时功能仍会正常工作。
-- GitHub Pages 是纯静态站点，不提供服务器通知、后台任务或云端备份。
+- GitHub Pages 是纯静态站点，不提供服务器通知、后台任务或云端备份；AI 功能需要可访问的独立 AI Backend。
+- AI 计划图当前不保存生成历史，且图片模型可能出现字体、排版或视觉细节波动，可使用“重新生成”继续尝试。
 - 桌面通知要求页面仍在浏览器中打开；权限拒绝后需手动修改网站权限，部分移动端浏览器的支持和后台行为可能不同。
 - 浏览器不支持 AVIF 时可以改用 JPEG、PNG 或 WebP；应用不会在 Canvas 中转换图片。
 - 当前截图以桌面端深色模式为主；移动端和浅色背景仍建议在后续版本补充视觉回归覆盖。
@@ -464,7 +491,8 @@ localStorage 数据按浏览器配置和站点来源（协议、域名及端口�
 
 - 用户注册、登录、云端数据库和多设备同步
 - 好友、排行榜、社交分享和多人自习室
-- AI 学习建议、复杂成就及复杂数据图表
+- AI 历史专注分析、学习建议、复杂成就及复杂数据图表
+- AI 计划图历史、更多风格控制与可选文字稳定化渲染
 - PWA 离线安装
 - 可选加密备份、包含图片资源的 ZIP 备份，以及更多历史恢复点
 - 自动化视觉回归检查
