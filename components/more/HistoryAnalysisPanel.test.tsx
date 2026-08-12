@@ -3,7 +3,11 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEYS } from "@/lib/storage";
 import type { HistoryAnalyzeResponse } from "@/types/history-analysis";
-import type { HistoryAnalyzer } from "./HistoryAnalysisPanel";
+import type { HistoryPlanDraftResponse } from "@/types/history-plan-draft";
+import type {
+  HistoryAnalyzer,
+  HistoryPlanDraftGenerator,
+} from "./HistoryAnalysisPanel";
 import { HistoryAnalysisPanel } from "./HistoryAnalysisPanel";
 
 const today = new Date(2026, 7, 12, 12);
@@ -65,6 +69,13 @@ const response: HistoryAnalyzeResponse = {
   },
 };
 
+const planResponse: HistoryPlanDraftResponse = {
+  plan: {
+    title: "下一阶段计划",
+    items: [{ task_name: "高数", action: "继续保持当前投入" }],
+  },
+};
+
 describe("HistoryAnalysisPanel", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"] });
@@ -117,6 +128,8 @@ describe("HistoryAnalysisPanel", () => {
     expect(screen.getByText(
       "完成一次专注后，这里会根据两个 7 天周期的统计给出简短趋势和建议。",
     )).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "生成下一阶段计划" }))
+      .not.toBeInTheDocument();
     expect(analyzer).not.toHaveBeenCalled();
   });
 
@@ -197,5 +210,142 @@ describe("HistoryAnalysisPanel", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("关键统计仍可正常查看");
     expect(screen.getByText("↑ 50%")).toBeInTheDocument();
+  });
+
+  it("generates one editable temporary plan from aggregates and current actions", async () => {
+    localStorage.setItem(
+      STORAGE_KEYS.sessions,
+      JSON.stringify([storedSession, previousStoredSession]),
+    );
+    const analyzer: HistoryAnalyzer = vi.fn().mockResolvedValue(response);
+    let resolvePlan!: (value: HistoryPlanDraftResponse) => void;
+    const planDraftGenerator: HistoryPlanDraftGenerator = vi.fn(
+      () => new Promise<HistoryPlanDraftResponse>((resolve) => { resolvePlan = resolve; }),
+    );
+    render(
+      <HistoryAnalysisPanel
+        analyzer={analyzer}
+        planDraftGenerator={planDraftGenerator}
+      />,
+    );
+
+    const generateButton = await screen.findByRole(
+      "button",
+      { name: "生成下一阶段计划" },
+    );
+    fireEvent.click(generateButton);
+
+    expect(await screen.findByText("正在把趋势和建议整理成简短草稿…"))
+      .toBeInTheDocument();
+    expect(planDraftGenerator).toHaveBeenCalledTimes(1);
+    const packet = JSON.stringify(vi.mocked(planDraftGenerator).mock.calls[0][0]);
+    expect(packet).toContain(response.analysis?.suggestions[0] ?? "");
+    expect(packet).not.toContain("startedAt");
+    expect(packet).not.toContain("endedAt");
+
+    resolvePlan(planResponse);
+    expect(await screen.findByRole("heading", { name: "下一阶段计划" }))
+      .toBeInTheDocument();
+    const actionInput = screen.getByRole("textbox", { name: "计划行动 1" });
+    expect(actionInput).toHaveValue("继续保持当前投入");
+    fireEvent.change(actionInput, { target: { value: "保持两次完整练习" } });
+    expect(actionInput).toHaveValue("保持两次完整练习");
+    expect(screen.getByText("草稿可直接修改，仅供你确认；不会保存或自动执行。"))
+      .toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "关闭草稿" }));
+    expect(screen.queryByRole("heading", { name: "下一阶段计划" }))
+      .not.toBeInTheDocument();
+  });
+
+  it("prevents duplicate concurrent plan requests and allows regeneration", async () => {
+    localStorage.setItem(
+      STORAGE_KEYS.sessions,
+      JSON.stringify([storedSession, previousStoredSession]),
+    );
+    const analyzer: HistoryAnalyzer = vi.fn().mockResolvedValue(response);
+    let resolvePlan!: (value: HistoryPlanDraftResponse) => void;
+    const planDraftGenerator: HistoryPlanDraftGenerator = vi.fn(
+      () => new Promise<HistoryPlanDraftResponse>((resolve) => { resolvePlan = resolve; }),
+    );
+    render(
+      <HistoryAnalysisPanel
+        analyzer={analyzer}
+        planDraftGenerator={planDraftGenerator}
+      />,
+    );
+
+    const button = await screen.findByRole("button", { name: "生成下一阶段计划" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(planDraftGenerator).toHaveBeenCalledTimes(1);
+
+    resolvePlan(planResponse);
+    expect(await screen.findByRole("heading", { name: "下一阶段计划" }))
+      .toBeInTheDocument();
+    vi.mocked(planDraftGenerator).mockResolvedValue(planResponse);
+    fireEvent.click(screen.getByRole("button", { name: "重新生成" }));
+    await waitFor(() => expect(planDraftGenerator).toHaveBeenCalledTimes(2));
+  });
+
+  it("keeps the completed analysis visible when plan generation fails", async () => {
+    localStorage.setItem(
+      STORAGE_KEYS.sessions,
+      JSON.stringify([storedSession, previousStoredSession]),
+    );
+    const analyzer: HistoryAnalyzer = vi.fn().mockResolvedValue(response);
+    const planDraftGenerator: HistoryPlanDraftGenerator = vi.fn()
+      .mockRejectedValue(new Error("offline"));
+    render(
+      <HistoryAnalysisPanel
+        analyzer={analyzer}
+        planDraftGenerator={planDraftGenerator}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole(
+      "button",
+      { name: "生成下一阶段计划" },
+    ));
+
+    expect(await screen.findByRole("alert"))
+      .toHaveTextContent("现有统计、趋势和建议不受影响");
+    expect(screen.getByText(response.analysis?.summary ?? "")).toBeInTheDocument();
+    expect(screen.getByText("↑ 50%")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重新生成计划" }))
+      .toBeInTheDocument();
+  });
+
+  it("renders at most three draft rows with mobile stacking hooks", async () => {
+    localStorage.setItem(
+      STORAGE_KEYS.sessions,
+      JSON.stringify([storedSession, previousStoredSession]),
+    );
+    const analyzer: HistoryAnalyzer = vi.fn().mockResolvedValue(response);
+    const planDraftGenerator: HistoryPlanDraftGenerator = vi.fn().mockResolvedValue({
+      plan: {
+        title: "下一阶段计划",
+        items: [
+          { task_name: "高数", action: "保持投入" },
+          { task_name: "英语", action: "恢复投入" },
+          { task_name: "项目", action: "维持节奏" },
+        ],
+      },
+    });
+    render(
+      <HistoryAnalysisPanel
+        analyzer={analyzer}
+        planDraftGenerator={planDraftGenerator}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole(
+      "button",
+      { name: "生成下一阶段计划" },
+    ));
+
+    expect(await screen.findAllByRole("textbox")).toHaveLength(6);
+    expect(document.querySelectorAll(".plan-draft-item")).toHaveLength(3);
+    expect(document.querySelector(".plan-draft-heading")).not.toBeNull();
   });
 });
