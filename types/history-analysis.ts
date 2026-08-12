@@ -10,11 +10,15 @@ export interface HistoryTaskAggregate {
   focus_count: number;
 }
 
-export interface HistoryAnalyzeRequest {
+export interface HistoryPeriodAggregate {
   start_date: string;
   end_date: string;
   days: HistoryDayAggregate[];
   tasks: HistoryTaskAggregate[];
+}
+
+export interface HistoryAnalyzeRequest extends HistoryPeriodAggregate {
+  previous_period?: HistoryPeriodAggregate;
 }
 
 export interface HistoryTaskSummary {
@@ -38,7 +42,27 @@ export interface HistoryAIAnalysis {
   suggestions: string[];
 }
 
+export type HistoryTrendDirection = "up" | "down" | "stable";
+
+export interface HistoryTaskChange {
+  task_name: string;
+  current_focused_seconds: number;
+  previous_focused_seconds: number;
+  change_seconds: number;
+}
+
+export interface HistoryTrend {
+  direction: HistoryTrendDirection;
+  total_focused_seconds_change: number;
+  total_focused_seconds_change_percent: number | null;
+  focus_count_change: number;
+  average_focus_seconds_change: number;
+  task_changes: HistoryTaskChange[];
+}
+
 export interface HistoryAnalyzeResponse {
   stats: HistoryStatistics;
+  previous_stats?: HistoryStatistics | null;
+  trend?: HistoryTrend | null;
   analysis: HistoryAIAnalysis | null;
 }
