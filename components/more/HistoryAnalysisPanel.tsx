@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownRight,
   ArrowUpRight,
+  ClipboardList,
   Clock3,
   Layers3,
   Lightbulb,
@@ -11,9 +12,11 @@ import {
   Minus,
   RefreshCw,
   Sparkles,
+  X,
 } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { analyzeHistory } from "@/lib/history-analysis-api";
+import { generateHistoryPlanDraft } from "@/lib/history-plan-draft-api";
 import {
   calculateHistoryStatistics,
   calculateHistoryTrend,
@@ -27,15 +30,29 @@ import type {
   HistoryAnalyzeResponse,
   HistoryTrend,
 } from "@/types/history-analysis";
+import type {
+  HistoryPlanDraft,
+  HistoryPlanDraftRequest,
+  HistoryPlanDraftResponse,
+} from "@/types/history-plan-draft";
 
 export type HistoryAnalyzer = (
   request: HistoryAnalyzeRequest,
   signal?: AbortSignal,
 ) => Promise<HistoryAnalyzeResponse>;
 
+export type HistoryPlanDraftGenerator = (
+  request: HistoryPlanDraftRequest,
+  signal?: AbortSignal,
+) => Promise<HistoryPlanDraftResponse>;
+
 type AnalysisState =
   | { status: "idle" | "loading" | "error" }
   | { status: "success"; analysis: HistoryAIAnalysis };
+
+type PlanDraftState =
+  | { status: "idle" | "loading" | "error" }
+  | { status: "success"; plan: HistoryPlanDraft };
 
 const DATE_FORMAT = new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric" });
 
@@ -73,11 +90,20 @@ function TrendIcon({ direction }: { direction: HistoryTrend["direction"] }) {
   return <Minus aria-hidden="true" />;
 }
 
-export function HistoryAnalysisPanel({ analyzer = analyzeHistory }: { analyzer?: HistoryAnalyzer }) {
+export function HistoryAnalysisPanel({
+  analyzer = analyzeHistory,
+  planDraftGenerator = generateHistoryPlanDraft,
+}: {
+  analyzer?: HistoryAnalyzer;
+  planDraftGenerator?: HistoryPlanDraftGenerator;
+}) {
   const [sessions, , hydrated] = useLocalStorage(STORAGE_KEYS.sessions, parseSessions);
   const [today, setToday] = useState<Date | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [state, setState] = useState<AnalysisState>({ status: "idle" });
+  const [planState, setPlanState] = useState<PlanDraftState>({ status: "idle" });
+  const planRequestPending = useRef(false);
+  const planController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -103,13 +129,23 @@ export function HistoryAnalysisPanel({ analyzer = analyzeHistory }: { analyzer?:
 
   useEffect(() => {
     if (!hydrated || !request || !stats || !comparison) return;
+    let active = true;
+    planController.current?.abort();
+    planController.current = null;
+    planRequestPending.current = false;
+    queueMicrotask(() => {
+      if (active) setPlanState({ status: "idle" });
+    });
     if (stats.focus_count + comparison.previousStats.focus_count === 0) {
-      queueMicrotask(() => setState({ status: "idle" }));
-      return;
+      queueMicrotask(() => {
+        if (active) setState({ status: "idle" });
+      });
+      return () => {
+        active = false;
+      };
     }
 
     const controller = new AbortController();
-    let active = true;
     queueMicrotask(() => {
       if (!active) return;
       setState({ status: "loading" });
@@ -132,7 +168,66 @@ export function HistoryAnalysisPanel({ analyzer = analyzeHistory }: { analyzer?:
     };
   }, [analyzer, comparison, hydrated, request, retryKey, stats]);
 
-  const retry = useCallback(() => setRetryKey((current) => current + 1), []);
+  useEffect(() => () => {
+    planController.current?.abort();
+  }, []);
+
+  const retry = useCallback(() => {
+    setRetryKey((current) => current + 1);
+  }, []);
+
+  const generatePlanDraft = useCallback(async () => {
+    if (planRequestPending.current || !request || state.status !== "success") return;
+    const controller = new AbortController();
+    planRequestPending.current = true;
+    planController.current = controller;
+    setPlanState({ status: "loading" });
+    const planRequest: HistoryPlanDraftRequest = {
+      ...request,
+      actions: state.analysis.suggestions,
+    };
+    try {
+      const result = await planDraftGenerator(planRequest, controller.signal);
+      if (!controller.signal.aborted) {
+        setPlanState({ status: "success", plan: result.plan });
+      }
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        setPlanState({ status: "error" });
+      }
+    } finally {
+      if (planController.current === controller) {
+        planController.current = null;
+        planRequestPending.current = false;
+      }
+    }
+  }, [planDraftGenerator, request, state]);
+
+  const closePlanDraft = useCallback(() => {
+    planController.current?.abort();
+    planController.current = null;
+    planRequestPending.current = false;
+    setPlanState({ status: "idle" });
+  }, []);
+
+  const updatePlanItem = useCallback((
+    index: number,
+    field: "task_name" | "action",
+    value: string,
+  ) => {
+    setPlanState((current) => {
+      if (current.status !== "success") return current;
+      return {
+        status: "success",
+        plan: {
+          ...current.plan,
+          items: current.plan.items.map((item, itemIndex) => (
+            itemIndex === index ? { ...item, [field]: value } : item
+          )),
+        },
+      };
+    });
+  }, []);
 
   if (!hydrated || !stats || !comparison) {
     return (
@@ -246,10 +341,82 @@ export function HistoryAnalysisPanel({ analyzer = analyzeHistory }: { analyzer?:
             <div className="analysis-actions">
               <h3><Lightbulb aria-hidden="true" />下一步建议</h3>
               <ol>{state.analysis.suggestions.map((suggestion) => <li key={suggestion}>{suggestion}</li>)}</ol>
+              {planState.status !== "success" && (
+                <button
+                  className="analysis-plan-button"
+                  type="button"
+                  onClick={generatePlanDraft}
+                  disabled={planState.status === "loading"}
+                >
+                  {planState.status === "loading"
+                    ? <LoaderCircle className="ai-loading-icon" aria-hidden="true" />
+                    : <ClipboardList aria-hidden="true" />}
+                  {planState.status === "loading"
+                    ? "正在生成计划…"
+                    : planState.status === "error"
+                      ? "重新生成计划"
+                      : "生成下一阶段计划"}
+                </button>
+              )}
             </div>
           </div>
         )}
       </article>
+
+      {planState.status === "loading" && (
+        <section className="history-plan-draft plan-draft-message" role="status">
+          <LoaderCircle className="ai-loading-icon" aria-hidden="true" />
+          <p>正在把趋势和建议整理成简短草稿…</p>
+        </section>
+      )}
+      {planState.status === "error" && (
+        <section className="history-plan-draft plan-draft-message plan-draft-error" role="alert">
+          <p>计划草稿暂时无法生成，现有统计、趋势和建议不受影响。</p>
+        </section>
+      )}
+      {planState.status === "success" && (
+        <section className="history-plan-draft" aria-labelledby="history-plan-draft-title">
+          <div className="plan-draft-heading">
+            <div>
+              <p className="eyebrow">Draft only</p>
+              <h2 id="history-plan-draft-title">{planState.plan.title}</h2>
+            </div>
+            <div className="plan-draft-controls">
+              <button type="button" onClick={generatePlanDraft}>
+                <RefreshCw aria-hidden="true" />重新生成
+              </button>
+              <button type="button" onClick={closePlanDraft}>
+                <X aria-hidden="true" />关闭草稿
+              </button>
+            </div>
+          </div>
+          <ol className="plan-draft-items">
+            {planState.plan.items.map((item, index) => (
+              <li className="plan-draft-item" key={`plan-item-${index}`}>
+                <label>
+                  <span>任务</span>
+                  <input
+                    aria-label={`计划任务 ${index + 1}`}
+                    maxLength={120}
+                    value={item.task_name}
+                    onChange={(event) => updatePlanItem(index, "task_name", event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>调整</span>
+                  <input
+                    aria-label={`计划行动 ${index + 1}`}
+                    maxLength={80}
+                    value={item.action}
+                    onChange={(event) => updatePlanItem(index, "action", event.target.value)}
+                  />
+                </label>
+              </li>
+            ))}
+          </ol>
+          <p className="plan-draft-note">草稿可直接修改，仅供你确认；不会保存或自动执行。</p>
+        </section>
+      )}
 
       <p className="analysis-privacy-note">仅发送两个 7 天周期的汇总统计；不会上传逐条记录或修改计时器。</p>
     </div>
