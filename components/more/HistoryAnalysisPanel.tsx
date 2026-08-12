@@ -58,17 +58,22 @@ export function HistoryAnalysisPanel({ analyzer = analyzeHistory }: { analyzer?:
 
     const controller = new AbortController();
     let active = true;
-    queueMicrotask(() => { if (active) setState({ status: "loading" }); });
-    analyzer(request, controller.signal).then(
-      (result) => {
-        if (!active || !result.analysis) return;
-        setState({ status: "success", analysis: result.analysis });
-      },
-      (error: unknown) => {
-        if (!active || (error instanceof DOMException && error.name === "AbortError")) return;
-        setState({ status: "error" });
-      },
-    );
+    queueMicrotask(() => {
+      if (!active) return;
+      setState({ status: "loading" });
+      analyzer(request, controller.signal).then(
+        (result) => {
+          if (!active) return;
+          setState(result.analysis
+            ? { status: "success", analysis: result.analysis }
+            : { status: "error" });
+        },
+        (error: unknown) => {
+          if (!active || (error instanceof DOMException && error.name === "AbortError")) return;
+          setState({ status: "error" });
+        },
+      );
+    });
     return () => {
       active = false;
       controller.abort();

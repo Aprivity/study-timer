@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEYS } from "@/lib/storage";
@@ -88,5 +89,28 @@ describe("HistoryAnalysisPanel", () => {
 
     await waitFor(() => expect(analyzer).toHaveBeenCalledTimes(2));
     expect(await screen.findByText(response.analysis.summary)).toBeInTheDocument();
+  });
+
+  it("does not duplicate the analysis request during a Strict Mode effect replay", async () => {
+    localStorage.setItem(STORAGE_KEYS.sessions, JSON.stringify([storedSession]));
+    const analyzer: HistoryAnalyzer = vi.fn().mockResolvedValue(response);
+
+    render(<StrictMode><HistoryAnalysisPanel analyzer={analyzer} /></StrictMode>);
+
+    expect(await screen.findByText(response.analysis.summary)).toBeInTheDocument();
+    expect(analyzer).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats an empty AI result as unavailable without hiding local statistics", async () => {
+    localStorage.setItem(STORAGE_KEYS.sessions, JSON.stringify([storedSession]));
+    const analyzer: HistoryAnalyzer = vi.fn().mockResolvedValue({
+      ...response,
+      analysis: null,
+    });
+
+    render(<HistoryAnalysisPanel analyzer={analyzer} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("关键统计仍可正常查看");
+    expect(screen.getAllByText("45 分钟")).toHaveLength(3);
   });
 });
