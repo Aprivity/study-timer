@@ -1,11 +1,13 @@
 import { getAiApiBaseUrl } from "./ai-api";
-import { calculateHistoryStatistics } from "./history-analysis";
+import { calculateHistoryStatistics, calculateHistoryTrend } from "./history-analysis";
 import type {
   HistoryAIAnalysis,
   HistoryAnalyzeRequest,
   HistoryAnalyzeResponse,
   HistoryStatistics,
   HistoryTaskSummary,
+  HistoryTaskChange,
+  HistoryTrend,
 } from "@/types/history-analysis";
 
 export type HistoryAnalysisApiErrorKind = "network" | "backend" | "invalid-response";
@@ -42,6 +44,13 @@ function exactRecord(value: unknown, keys: readonly string[]): Record<string, un
 function nonNegativeInteger(value: unknown): number {
   if (!Number.isInteger(value) || (value as number) < 0) {
     throw new HistoryAnalysisApiError("invalid-response", "AI 分析服务返回了无效统计值");
+  }
+  return value as number;
+}
+
+function signedInteger(value: unknown): number {
+  if (!Number.isInteger(value)) {
+    throw new HistoryAnalysisApiError("invalid-response", "AI 分析服务返回了无效变化值");
   }
   return value as number;
 }
@@ -106,6 +115,62 @@ function parseAnalysis(value: unknown): HistoryAIAnalysis | null {
   };
 }
 
+function parseTaskChange(value: unknown): HistoryTaskChange {
+  const record = exactRecord(value, [
+    "task_name",
+    "current_focused_seconds",
+    "previous_focused_seconds",
+    "change_seconds",
+  ]);
+  if (typeof record.task_name !== "string"
+    || !record.task_name.trim()
+    || record.task_name.trim().length > 120) {
+    throw new HistoryAnalysisApiError("invalid-response", "AI 分析服务返回了无效任务变化");
+  }
+  const currentSeconds = nonNegativeInteger(record.current_focused_seconds);
+  const previousSeconds = nonNegativeInteger(record.previous_focused_seconds);
+  const changeSeconds = signedInteger(record.change_seconds);
+  if (changeSeconds !== currentSeconds - previousSeconds || changeSeconds === 0) {
+    throw new HistoryAnalysisApiError("invalid-response", "AI 分析服务返回了不一致的任务变化");
+  }
+  return {
+    task_name: record.task_name.trim(),
+    current_focused_seconds: currentSeconds,
+    previous_focused_seconds: previousSeconds,
+    change_seconds: changeSeconds,
+  };
+}
+
+function parseTrend(value: unknown): HistoryTrend | null {
+  if (value === null || value === undefined) return null;
+  const record = exactRecord(value, [
+    "direction",
+    "total_focused_seconds_change",
+    "total_focused_seconds_change_percent",
+    "focus_count_change",
+    "average_focus_seconds_change",
+    "task_changes",
+  ]);
+  if (record.direction !== "up" && record.direction !== "down" && record.direction !== "stable") {
+    throw new HistoryAnalysisApiError("invalid-response", "AI 分析服务返回了无效趋势方向");
+  }
+  const percent = record.total_focused_seconds_change_percent;
+  if (percent !== null && !Number.isInteger(percent)) {
+    throw new HistoryAnalysisApiError("invalid-response", "AI 分析服务返回了无效变化比例");
+  }
+  if (!Array.isArray(record.task_changes) || record.task_changes.length > 5) {
+    throw new HistoryAnalysisApiError("invalid-response", "AI 分析服务返回了无效任务趋势");
+  }
+  return {
+    direction: record.direction,
+    total_focused_seconds_change: signedInteger(record.total_focused_seconds_change),
+    total_focused_seconds_change_percent: percent as number | null,
+    focus_count_change: signedInteger(record.focus_count_change),
+    average_focus_seconds_change: signedInteger(record.average_focus_seconds_change),
+    task_changes: record.task_changes.map(parseTaskChange),
+  };
+}
+
 function matchesExpectedStats(actual: HistoryStatistics, expected: HistoryStatistics): boolean {
   return actual.period_days === expected.period_days
     && actual.start_date === expected.start_date
@@ -116,15 +181,54 @@ function matchesExpectedStats(actual: HistoryStatistics, expected: HistoryStatis
     && JSON.stringify(actual.main_tasks) === JSON.stringify(expected.main_tasks);
 }
 
+function responseRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new HistoryAnalysisApiError("invalid-response", "AI 分析服务返回了无法识别的数据");
+  }
+  const record = value as Record<string, unknown>;
+  const required = ["stats", "analysis"];
+  const allowed = [...required, "previous_stats", "trend"];
+  if (required.some((key) => !(key in record))
+    || Object.keys(record).some((key) => !allowed.includes(key))) {
+    throw new HistoryAnalysisApiError("invalid-response", "AI 分析服务返回的数据不完整或包含未知字段");
+  }
+  return record;
+}
+
 function parseResponse(payload: unknown, request: HistoryAnalyzeRequest): HistoryAnalyzeResponse {
-  const record = exactRecord(payload, ["stats", "analysis"]);
+  const record = responseRecord(payload);
   const stats = parseStatistics(record.stats);
+  const previousStats = record.previous_stats === undefined || record.previous_stats === null
+    ? null
+    : parseStatistics(record.previous_stats);
+  const trend = parseTrend(record.trend);
   const analysis = parseAnalysis(record.analysis);
   const expectedStats = calculateHistoryStatistics(request);
-  if (!matchesExpectedStats(stats, expectedStats) || (stats.focus_count > 0 && analysis === null)) {
+  const expectedPreviousStats = request.previous_period
+    ? calculateHistoryStatistics(request.previous_period)
+    : null;
+  const expectedTrend = request.previous_period
+    ? calculateHistoryTrend(request, request.previous_period)
+    : null;
+  const comparisonMatches = expectedPreviousStats && expectedTrend
+    ? previousStats !== null
+      && trend !== null
+      && matchesExpectedStats(previousStats, expectedPreviousStats)
+      && JSON.stringify(trend) === JSON.stringify(expectedTrend)
+    : previousStats === null && trend === null;
+  const combinedFocusCount = stats.focus_count + (previousStats?.focus_count ?? 0);
+  if (!matchesExpectedStats(stats, expectedStats)
+    || !comparisonMatches
+    || (combinedFocusCount > 0 && analysis === null)
+    || (combinedFocusCount === 0 && analysis !== null)) {
     throw new HistoryAnalysisApiError("invalid-response", "AI 分析服务返回的统计结果不一致");
   }
-  return { stats, analysis };
+  return {
+    stats,
+    ...(record.previous_stats !== undefined ? { previous_stats: previousStats } : {}),
+    ...(record.trend !== undefined ? { trend } : {}),
+    analysis,
+  };
 }
 
 export async function analyzeHistory(

@@ -366,6 +366,18 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
 .analysis-metrics svg { grid-row: 1 / 3; width: 18px; color: var(--sage-primary); }
 .analysis-metrics span { color: var(--text-muted); font-size: .68rem; letter-spacing: .04em; }
 .analysis-metrics strong { font-size: .95rem; font-weight: 620; line-height: 1.35; }
+.analysis-trend-strip { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 86px; border-bottom: 1px solid var(--divider); padding: 15px 4px; }
+.analysis-trend-primary { display: grid; gap: 6px; }
+.analysis-trend-primary > span { color: var(--text-muted); font-size: .67rem; letter-spacing: .03em; }
+.analysis-trend-primary strong { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; font-size: .9rem; font-weight: 620; }
+.analysis-trend-primary em { display: inline-flex; align-items: center; gap: 3px; border-radius: 999px; padding: 4px 8px; background: rgba(143,170,150,.08); font-size: .72rem; font-style: normal; font-weight: 650; }
+.analysis-trend-primary em svg { width: 14px; height: 14px; }
+.trend-up .analysis-trend-primary em { color: var(--sage-light); }
+.trend-down .analysis-trend-primary em { color: var(--danger); }
+.trend-stable .analysis-trend-primary em { color: var(--text-muted); }
+.analysis-trend-details { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px 15px; color: var(--text-muted); font-size: .68rem; }
+.analysis-trend-details span + span { position: relative; }
+.analysis-trend-details span + span::before { position: absolute; left: -8px; color: var(--divider); content: "·"; }
 .main-tasks { padding-top: 2px; }
 .main-tasks ol { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--divider); }
 .main-tasks li { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--divider); font-size: .82rem; }
@@ -407,6 +419,8 @@ button:disabled { opacity: .45; cursor: not-allowed; transform: none !important;
   .analysis-metrics { grid-template-columns: 1fr; }
   .analysis-metrics article { min-height: 82px; padding: 16px 12px; }
   .analysis-metrics article + article { border-left: 0; border-top: 1px solid var(--divider); }
+  .analysis-trend-strip { align-items: flex-start; flex-direction: column; gap: 10px; padding: 16px 4px; }
+  .analysis-trend-details { justify-content: flex-start; }
   .ai-analysis-card { padding: 19px 17px; }
 }
 

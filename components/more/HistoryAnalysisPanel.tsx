@@ -1,13 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Clock3, Layers3, Lightbulb, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Clock3,
+  Layers3,
+  Lightbulb,
+  LoaderCircle,
+  Minus,
+  RefreshCw,
+  Sparkles,
+} from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { analyzeHistory } from "@/lib/history-analysis-api";
-import { calculateHistoryStatistics, createHistoryAnalyzeRequest } from "@/lib/history-analysis";
+import {
+  calculateHistoryStatistics,
+  calculateHistoryTrend,
+  createHistoryAnalyzeRequest,
+} from "@/lib/history-analysis";
 import { parseSessions, STORAGE_KEYS } from "@/lib/storage";
 import { formatHumanDuration } from "@/lib/time-format";
-import type { HistoryAIAnalysis, HistoryAnalyzeRequest, HistoryAnalyzeResponse } from "@/types/history-analysis";
+import type {
+  HistoryAIAnalysis,
+  HistoryAnalyzeRequest,
+  HistoryAnalyzeResponse,
+  HistoryTrend,
+} from "@/types/history-analysis";
 
 export type HistoryAnalyzer = (
   request: HistoryAnalyzeRequest,
@@ -26,6 +45,32 @@ function formatDateRange(start: string, end: string): string {
     return new Date(year, month - 1, day);
   };
   return `${DATE_FORMAT.format(parse(start))} – ${DATE_FORMAT.format(parse(end))}`;
+}
+
+function formatSignedCount(value: number): string {
+  if (value === 0) return "持平";
+  return `${value > 0 ? "+" : ""}${value} 次`;
+}
+
+function formatSignedDuration(value: number): string {
+  if (value === 0) return "持平";
+  return `${value > 0 ? "+" : "−"}${formatHumanDuration(Math.abs(value))}`;
+}
+
+function formatTrendChange(trend: HistoryTrend): string {
+  if (trend.direction === "stable") return "持平";
+  if (trend.total_focused_seconds_change_percent === null) return "新增投入";
+  if (trend.total_focused_seconds_change_percent === 0) {
+    return trend.direction === "up" ? "↑ <1%" : "↓ <1%";
+  }
+  const arrow = trend.direction === "up" ? "↑" : "↓";
+  return `${arrow} ${Math.abs(trend.total_focused_seconds_change_percent)}%`;
+}
+
+function TrendIcon({ direction }: { direction: HistoryTrend["direction"] }) {
+  if (direction === "up") return <ArrowUpRight aria-hidden="true" />;
+  if (direction === "down") return <ArrowDownRight aria-hidden="true" />;
+  return <Minus aria-hidden="true" />;
 }
 
 export function HistoryAnalysisPanel({ analyzer = analyzeHistory }: { analyzer?: HistoryAnalyzer }) {
@@ -48,10 +93,17 @@ export function HistoryAnalysisPanel({ analyzer = analyzeHistory }: { analyzer?:
     () => (request ? calculateHistoryStatistics(request) : null),
     [request],
   );
+  const comparison = useMemo(() => {
+    if (!request?.previous_period) return null;
+    return {
+      previousStats: calculateHistoryStatistics(request.previous_period),
+      trend: calculateHistoryTrend(request, request.previous_period),
+    };
+  }, [request]);
 
   useEffect(() => {
-    if (!hydrated || !request || !stats) return;
-    if (stats.focus_count === 0) {
+    if (!hydrated || !request || !stats || !comparison) return;
+    if (stats.focus_count + comparison.previousStats.focus_count === 0) {
       queueMicrotask(() => setState({ status: "idle" }));
       return;
     }
@@ -78,20 +130,21 @@ export function HistoryAnalysisPanel({ analyzer = analyzeHistory }: { analyzer?:
       active = false;
       controller.abort();
     };
-  }, [analyzer, hydrated, request, retryKey, stats]);
+  }, [analyzer, comparison, hydrated, request, retryKey, stats]);
 
   const retry = useCallback(() => setRetryKey((current) => current + 1), []);
 
-  if (!hydrated || !stats) {
+  if (!hydrated || !stats || !comparison) {
     return (
       <div className="history-analysis-loading" role="status">
         <LoaderCircle className="ai-loading-icon" aria-hidden="true" />
-        <span>正在读取最近 7 天记录…</span>
+        <span>正在读取最近 14 天记录…</span>
       </div>
     );
   }
 
-  const hasHistory = stats.focus_count > 0;
+  const hasCurrentHistory = stats.focus_count > 0;
+  const hasHistory = hasCurrentHistory || comparison.previousStats.focus_count > 0;
   return (
     <div className="history-analysis-panel">
       <section aria-labelledby="recent-focus-title">
@@ -119,14 +172,31 @@ export function HistoryAnalysisPanel({ analyzer = analyzeHistory }: { analyzer?:
             <strong>{formatHumanDuration(stats.average_focus_seconds)}</strong>
           </article>
         </div>
+        <div className={`analysis-trend-strip trend-${comparison.trend.direction}`}>
+          <div className="analysis-trend-primary">
+            <span>对比前 7 天</span>
+            <strong>
+              最近 7 天 {formatHumanDuration(stats.total_focused_seconds)}
+              <em>
+                <TrendIcon direction={comparison.trend.direction} />
+                {formatTrendChange(comparison.trend)}
+              </em>
+            </strong>
+          </div>
+          <div className="analysis-trend-details">
+            <span>前 7 天 {formatHumanDuration(comparison.previousStats.total_focused_seconds)}</span>
+            <span>次数 {formatSignedCount(comparison.trend.focus_count_change)}</span>
+            <span>平均单次 {formatSignedDuration(comparison.trend.average_focus_seconds_change)}</span>
+          </div>
+        </div>
       </section>
 
       <section className="main-tasks" aria-labelledby="main-tasks-title">
         <div className="analysis-section-heading compact">
           <h2 id="main-tasks-title">主要任务</h2>
-          <span>按专注时长</span>
+          <span>最近 7 天 · 按专注时长</span>
         </div>
-        {stats.main_tasks.length > 0 ? (
+        {hasCurrentHistory ? (
           <ol>
             {stats.main_tasks.map((task) => (
               <li key={task.task_name}>
@@ -145,24 +215,24 @@ export function HistoryAnalysisPanel({ analyzer = analyzeHistory }: { analyzer?:
           <span><Sparkles aria-hidden="true" /></span>
           <div>
             <p className="eyebrow">AI reflection</p>
-            <h2 id="ai-analysis-title">简短分析</h2>
+            <h2 id="ai-analysis-title">简短趋势</h2>
           </div>
         </div>
 
         {!hasHistory && (
           <div className="ai-analysis-message">
-            <p>完成一次专注后，这里会根据最近 7 天的统计给出简短规律和建议。</p>
+            <p>完成一次专注后，这里会根据两个 7 天周期的统计给出简短趋势和建议。</p>
           </div>
         )}
         {hasHistory && state.status === "loading" && (
           <div className="ai-analysis-message" role="status">
             <LoaderCircle className="ai-loading-icon" aria-hidden="true" />
-            <p>正在整理你的专注规律…</p>
+            <p>正在整理你的专注趋势…</p>
           </div>
         )}
         {hasHistory && state.status === "error" && (
           <div className="ai-analysis-message analysis-error" role="alert">
-            <p>AI 分析暂时不可用，关键统计仍可正常查看。</p>
+            <p>AI 分析暂时不可用，关键统计仍可正常查看，趋势也不受影响。</p>
             <button type="button" onClick={retry}><RefreshCw aria-hidden="true" />重试</button>
           </div>
         )}
@@ -181,7 +251,7 @@ export function HistoryAnalysisPanel({ analyzer = analyzeHistory }: { analyzer?:
         )}
       </article>
 
-      <p className="analysis-privacy-note">仅发送最近 7 天的汇总统计；不会修改历史记录或计时器。</p>
+      <p className="analysis-privacy-note">仅发送两个 7 天周期的汇总统计；不会上传逐条记录或修改计时器。</p>
     </div>
   );
 }

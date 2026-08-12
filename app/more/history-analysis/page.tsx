@@ -10,7 +10,7 @@ export default function HistoryAnalysisPage() {
       <div className="page-heading">
         <p className="eyebrow">See your recent rhythm</p>
         <h1 className="page-title">AI 历史专注分析</h1>
-        <p className="page-copy">用少量关键数据，看清最近 7 天的专注状态与下一步。</p>
+        <p className="page-copy">用少量关键数据，看清最近 7 天与前一周期的专注变化。</p>
       </div>
       <HistoryAnalysisPanel />
     </PageContainer>
