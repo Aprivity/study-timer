@@ -22,14 +22,14 @@ export default function MorePage() {
           <ArrowUpRight className="feature-arrow" aria-hidden="true" />
         </Link>
 
-        <div className="feature-row feature-row-disabled" aria-disabled="true">
+        <Link className="feature-row" href="/more/history-analysis">
           <span className="feature-icon" aria-hidden="true"><BarChart3 /></span>
           <span className="feature-copy">
             <strong>AI 历史专注分析</strong>
             <small>根据历史记录分析学习状态</small>
           </span>
-          <span className="feature-status">即将推出</span>
-        </div>
+          <ArrowUpRight className="feature-arrow" aria-hidden="true" />
+        </Link>
       </section>
     </PageContainer>
   );
