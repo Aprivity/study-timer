@@ -98,8 +98,12 @@ Android 用 `WebViewAssetLoader` 在应用内部的虚拟 `https://focus.aprivit
 
 ## 验证与当前范围
 
-自动检查包括现有网页测试、TypeScript 生产构建、ESLint、打包脚本测试、Android 路径映射单元测试、Android lint，以及 APK 签名完整性校验。
+自动检查包括现有网页测试、TypeScript 生产构建、ESLint、打包脚本测试、Android 路径映射单元测试、Android lint，以及 APK 签名完整性校验。每次 assembleDebug/assembleRelease 结束时，还会逐个检查最终 APK 内的网页资源与静态导出是否完全一致；缺少任何脚本、样式或字体即判定失败。
 
 首次安装请在真机确认：离线启动和页面导航；计时结束与恢复；背景图片选择；备份保存、取消保存和导入；计划图保存；返回键、键盘和屏幕旋转。
 
 这版完成安装包链路与基本原生文件交互。现有浏览器桌面通知不是 Android 原生通知，WebView 不保证后台执行；锁屏、系统省电、强制结束进程时无法承诺准点声音或提醒。后续若需要可靠后台提醒，应增加原生计时、AlarmManager/通知及相应权限，再进行真机验证。iOS 安装包需要独立的 Apple 签名和 macOS 构建流程，本次不包含。
+
+### 页面没有渲染或无法操作
+
+Next.js 的 JavaScript、CSS 和字体位于 `_next/`。Android 默认资产过滤规则会跳过下划线开头的目录，因此仅检查 `out/` 存在或 APK 签名正确不足以确认页面可运行。工程现已移除这条过滤规则，并对最终 APK 做资源完整性检查。无需为修复这一问题新开前端仓库；网页与 Android 外壳共用当前项目即可。
