@@ -7,7 +7,11 @@
     "build": "next build",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "android:check": "node --test scripts/test-android-build.mjs",
+    "android:prepare": "node scripts/android-build.mjs prepare",
+    "android:debug": "node scripts/android-build.mjs debug",
+    "android:release": "node scripts/android-build.mjs release"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",

@@ -1,0 +1,48 @@
+import groovy.json.JsonSlurper
+
+plugins { id 'com.android.application' }
+
+def versionFile = rootProject.file('build/app-version.json')
+if (!versionFile.exists()) throw new GradleException('Run npm run android:prepare before Gradle sync/build')
+def appVersion = new JsonSlurper().parse(versionFile)
+def signingNames = ['ANDROID_KEYSTORE_PATH', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD']
+def signingReady = signingNames.every { System.getenv(it) }
+def releaseRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
+if (releaseRequested && !signingReady) throw new GradleException('Release builds require all four ANDROID_* signing variables')
+
+android {
+    namespace 'xyz.aprivity.focus'
+    compileSdk 36
+    buildToolsVersion '36.0.0'
+    defaultConfig {
+        applicationId 'xyz.aprivity.focus'
+        minSdk 26
+        targetSdk 36
+        versionCode appVersion.code as int
+        versionName appVersion.name
+    }
+    signingConfigs {
+        release {
+            if (signingReady) {
+                storeFile file(System.getenv('ANDROID_KEYSTORE_PATH'))
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        debug { applicationIdSuffix '.debug'; versionNameSuffix '-debug' }
+        release { signingConfig signingConfigs.release; minifyEnabled false }
+    }
+    sourceSets.main.assets.srcDirs = [rootProject.file('build/web-assets')]
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    buildFeatures { buildConfig true }
+    lint { abortOnError true }
+}
+
+dependencies {
+    implementation 'androidx.activity:activity:1.10.1'
+    implementation 'androidx.webkit:webkit:1.14.0'
+    testImplementation 'junit:junit:4.13.2'
+}

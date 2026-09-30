@@ -40,6 +40,16 @@ GitHub Pages 地址：[https://aprivity.github.io/study-timer/](https://aprivity
 - 动态网页标题与手动全屏专注模式
 - 响应式桌面/移动布局、键盘焦点样式和减少动画模式
 
+## Android App
+
+项目现已包含 Android APK 构建链路，支持 Android 8.0 及以上。应用内置网页静态资源，基础计时与本地历史可离线使用，AI 功能连接现有 HTTPS 后端。
+
+- PR / main 更新：**Actions → Android APK → android-debug** 下载测试安装包。
+- 配置四项签名 Secrets 后：手动构建正式包，或通过现有 **Release** 工作流发布 APK 和网页归档。
+- 本地打包：`npm ci`、`npm run android:debug`。
+
+详见 [Android 安装、签名、发布和能力范围](docs/android.md)。当前未实现可靠的锁屏后台通知。
+
 ## 技术栈
 
 - Next.js 16 App Router
@@ -527,3 +537,4 @@ AI 测试覆盖统一自然语言计时输入、自由专注/番茄配置应用�
 ## License
 
 当前仓库暂未指定开源许可证。
+

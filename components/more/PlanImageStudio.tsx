@@ -1,5 +1,6 @@
 "use client";
 
+import { isNativeDownloadAvailable, saveBlob } from "@/lib/download";
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Download, ImageIcon, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
@@ -18,6 +19,8 @@ type GenerationState =
 const INPUT_EXAMPLE = "明天上午学习两小时高数，下午背一小时四级单词，晚上看45分钟美股视频。";
 
 export function PlanImageStudio({ generator = planImageGenerator }: { generator?: PlanImageGenerator }) {
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [plan, setPlan] = useState("");
   const [generation, setGeneration] = useState<GenerationState>({ status: "idle" });
   const objectUrlRef = useRef<string | null>(null);
@@ -64,6 +67,15 @@ export function PlanImageStudio({ generator = planImageGenerator }: { generator?
         setGeneration({ status: "error" });
       }
     }
+  };
+
+  const downloadImage = async () => {
+    if (generation.status !== "success" || saving) return;
+    setDownloadError(null);
+    setSaving(true);
+    try { await saveBlob(generation.result.blob, generation.result.downloadName); }
+    catch (error) { setDownloadError(error instanceof Error ? error.message : "图片保存失败"); }
+    finally { setSaving(false); }
   };
 
   const isRetry = generation.status === "success" || generation.status === "error";
@@ -129,12 +141,17 @@ export function PlanImageStudio({ generator = planImageGenerator }: { generator?
                 priority={false}
               />
             </div>
-            <a className="secondary-button plan-download-button" href={generation.result.src} download={generation.result.downloadName}>
+            <a className="secondary-button plan-download-button" href={generation.result.src} download={generation.result.downloadName}
+              aria-disabled={saving} onClick={(event) => {
+                if (isNativeDownloadAvailable()) { event.preventDefault(); void downloadImage(); }
+              }}>
               <Download size={17} aria-hidden="true" />下载图片
             </a>
+            {downloadError && <p role="alert">{downloadError}</p>}
           </div>
         )}
       </div>
     </section>
   );
 }
+
