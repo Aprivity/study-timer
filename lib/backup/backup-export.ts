@@ -1,3 +1,4 @@
+import { saveBlob } from "@/lib/download";
 import packageJson from "@/package.json";
 import { loadBackgroundSettings } from "@/lib/background-storage";
 import { getBackgroundImage, BACKGROUND_IMAGE_KEY } from "@/lib/indexed-db";
@@ -75,22 +76,8 @@ export async function readLocalBackupSource(): Promise<BackupSourceData> {
 export async function exportLocalBackup(now = new Date()): Promise<{ backup: AprivityFocusBackup; fileName: string }> {
   const backup = createBackup(await readLocalBackupSource(), now);
   const fileName = getBackupFileName(now);
-  let url: string | null = null;
-  try {
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8" });
-    url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = fileName;
-    link.style.display = "none";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  } catch {
-    throw new Error("浏览器未能创建备份下载，请检查下载权限后重试。");
-  } finally {
-    const downloadUrl = url;
-    if (downloadUrl) window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
-  }
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8" });
+  await saveBlob(blob, fileName);
   return { backup, fileName };
 }
+

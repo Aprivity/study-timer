@@ -1,0 +1,83 @@
+import groovy.json.JsonSlurper
+
+plugins { id 'com.android.application' }
+
+def versionFile = rootProject.file('build/app-version.json')
+if (!versionFile.exists()) throw new GradleException('Run npm run android:prepare before Gradle sync/build')
+def appVersion = new JsonSlurper().parse(versionFile)
+def signingNames = ['ANDROID_KEYSTORE_PATH', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD']
+def signingReady = signingNames.every { System.getenv(it) }
+def releaseRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
+if (releaseRequested && !signingReady) throw new GradleException('Release builds require all four ANDROID_* signing variables')
+
+android {
+    namespace 'xyz.aprivity.focus'
+    compileSdk 36
+    buildToolsVersion '36.0.0'
+    defaultConfig {
+        applicationId 'xyz.aprivity.focus'
+        minSdk 26
+        targetSdk 36
+        versionCode appVersion.code as int
+        versionName appVersion.name
+    }
+    signingConfigs {
+        release {
+            if (signingReady) {
+                storeFile file(System.getenv('ANDROID_KEYSTORE_PATH'))
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        debug { applicationIdSuffix '.debug'; versionNameSuffix '-debug' }
+        release { signingConfig signingConfigs.release; minifyEnabled false }
+    }
+    // AAPT's default <dir>_* rule drops Next.js _next (JavaScript, CSS and fonts).
+    androidResources {
+        ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+    }
+    sourceSets.main.assets.srcDirs = [rootProject.file('build/web-assets')]
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    buildFeatures { buildConfig true }
+    lint { abortOnError true }
+}
+
+dependencies {
+    implementation 'androidx.activity:activity:1.10.1'
+    implementation 'androidx.webkit:webkit:1.14.0'
+    testImplementation 'junit:junit:4.13.2'
+}
+
+// Verify the final APK, not only the pre-packaging export directory.
+['Debug', 'Release'].each { variant ->
+    def verification = tasks.register("verify${variant}WebAssets") {
+        doLast {
+            def expected = rootProject.file('build/web-assets')
+            def apk = file("build/outputs/apk/${variant.toLowerCase()}/app-${variant.toLowerCase()}.apk")
+            if (!expected.isDirectory() || !apk.isFile()) throw new GradleException('Missing export or APK')
+            def assets = []
+            expected.eachFileRecurse(groovy.io.FileType.FILES) { assets.add(it) }
+            def paths = assets.collect { expected.toPath().relativize(it.toPath()).toString().replace('\\', '/') }
+            if (!paths.any { it.startsWith('_next/') && it.endsWith('.js') } ||
+                !paths.any { it.startsWith('_next/') && it.endsWith('.css') }) {
+                throw new GradleException('Export must include Next.js JavaScript and CSS')
+            }
+            new java.util.zip.ZipFile(apk).withCloseable { zip ->
+                assets.each { asset ->
+                    def path = expected.toPath().relativize(asset.toPath()).toString().replace('\\', '/')
+                    def entry = zip.getEntry("assets/${path}")
+                    if (entry == null) throw new GradleException("APK is missing web asset: ${path}")
+                    def actual = zip.getInputStream(entry).withCloseable { it.bytes }
+                    if (!java.util.Arrays.equals(asset.bytes, actual)) {
+                        throw new GradleException("APK web asset differs from export: ${path}")
+                    }
+                }
+            }
+            logger.lifecycle("Verified ${assets.size()} bundled web assets in ${apk.name}")
+        }
+    }
+    tasks.matching { it.name == "assemble${variant}" }.configureEach { finalizedBy verification }
+}

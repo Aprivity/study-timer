@@ -21,7 +21,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  android:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/android.yml
+    with:
+      release: true
+    secrets: inherit
+
   release:
+    needs: android
     name: Validate and publish release
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -123,6 +131,12 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "tag_exists=${TAG_EXISTS}" >> "$GITHUB_OUTPUT"
 
+      - name: Download signed Android APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-release
+          path: android-release-dist
+
       - name: Package self-hosted export
         id: package
         env:
@@ -187,6 +201,8 @@ jobs:
             "$TAG"
             "$ARCHIVE"
             "${ARCHIVE}.sha256"
+            android-release-dist/*.apk
+            android-release-dist/*.sha256
             --verify-tag
             --title "$TAG"
             --generate-notes
@@ -204,3 +220,4 @@ jobs:
           TAG: ${{ steps.release_meta.outputs.tag }}
           GH_TOKEN: ${{ github.token }}
         run: gh release view "$TAG"
+

@@ -7,3 +7,12 @@
 .env*
 !.env.example
 *.tsbuildinfo
+
+
+# Android generated output and private signing files
+/android/.gradle/
+/android/build/
+/android/app/build/
+/android/local.properties
+*.jks
+*.keystore
